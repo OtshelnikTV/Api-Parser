@@ -1680,6 +1680,9 @@ async function parseEndpoint() {
         const result = await response.json();
         console.log('Parsed result:', result);
         
+        // Set URL from selected endpoint
+        result.url = selectedEndpoint;
+        
         currentData = result;
         
         showEditor();
@@ -2106,19 +2109,19 @@ function displayParsedData(data) {
                     </div>
                     <div class="kv-label">URL</div>
                     <div class="kv-value cell-auto">
-                        <input type="text" class="cell-input" value="${escapeHtml(data.url || '')}" data-bind="url">
+                        <span class="cell-static">${escapeHtml(data.url || '')}</span>
                     </div>
                     <div class="kv-label">Тег</div>
                     <div class="kv-value cell-auto">
-                        <input type="text" class="cell-input" value="${escapeHtml(data.tag || '')}" data-bind="tag">
+                        <span class="cell-static">${escapeHtml(data.tag || '')}</span>
                     </div>
                     <div class="kv-label">Operation</div>
                     <div class="kv-value cell-auto">
-                        <input type="text" class="cell-input" value="${escapeHtml(data.operationId || '')}" data-bind="operationId">
+                        <span class="cell-static">${escapeHtml(data.operationId || '')}</span>
                     </div>
                     <div class="kv-label">Описание</div>
                     <div class="kv-value ${data.summary ? 'cell-auto' : 'cell-manual'}">
-                        <textarea class="cell-input" data-bind="summary" placeholder="Описание...">${escapeHtml(data.summary || '')}</textarea>
+                        <span class="cell-static">${escapeHtml(data.summary || '')}</span>
                     </div>
                 </div>
             </div>
