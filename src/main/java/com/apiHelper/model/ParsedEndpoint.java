@@ -20,6 +20,7 @@ public class ParsedEndpoint {
     
     private String algorithm;
     private String notes;
+    private String requestSchemaName;
     
     public String getMethod() {
         return method;
@@ -107,5 +108,13 @@ public class ParsedEndpoint {
     
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+    
+    public String getRequestSchemaName() {
+        return requestSchemaName;
+    }
+    
+    public void setRequestSchemaName(String requestSchemaName) {
+        this.requestSchemaName = requestSchemaName;
     }
 }

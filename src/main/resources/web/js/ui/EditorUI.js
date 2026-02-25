@@ -195,13 +195,21 @@ export class EditorUI {
                 depthMarker = '<span class="indent-marker">' + markers.join('') + ' </span>';
             }
 
-            // Бейджи
-            const refBadge = f.refName ? `<span class="nested-dto-badge">${DOMHelpers.escape(f.refName)}</span>` : '';
+            // Имя поля + бейдж DTO
+            const refBadge = f.refName ? `<span class="nested-dto-badge" style="margin-left:6px;background:#e6f1ff;color:#58a6ff;border-radius:3px;padding:2px 6px;font-size:11px;font-weight:600;">${DOMHelpers.escape(f.refName)}</span>` : '';
             const arrayBadge = f.isArray ? '<span class="array-badge">[]</span>' : '';
-
             const nameDisplay = `<div class="field-name-wrapper" style="margin-left:${indentPx}px">${depthMarker}<code>${DOMHelpers.escape(f.name)}</code>${arrayBadge}${refBadge}</div>`;
-
             const rowClass = f.depth > 0 ? ' nested-field' : '';
+
+            // Тип поля: если есть отдельная DTO, показываем её
+            let typeDisplay = typeof f.getDisplayType === 'function' ? f.getDisplayType() : f.type;
+            if ((!typeDisplay || typeDisplay === '—') && f.refName) {
+                typeDisplay = f.refName;
+            }
+            let typeBadge = '';
+            if (f.refName) {
+                typeBadge = `<span class="nested-dto-badge" style="margin-left:6px;background:#bc8cff33;color:#bc8cff;border-radius:4px;padding:2px 7px;font-size:10px;font-weight:600;">${DOMHelpers.escape(f.refName)}</span>`;
+            }
 
             // Если showSource = true, добавляем столбец "Источник"
             const sourceCell = showSource ? `<td class="cell-required">
@@ -210,7 +218,7 @@ export class EditorUI {
 
             rows += `<tr class="${rowClass}">
                 <td class="cell-auto"><span class="cell-static">${nameDisplay}</span></td>
-                <td class="cell-auto"><span class="cell-static"><code>${DOMHelpers.escape(f.type)}</code></span></td>
+                <td class="cell-auto"><span class="cell-static"><code>${DOMHelpers.escape(typeDisplay)}</code>${typeBadge}</span></td>
                 <td class="cell-auto"><span class="cell-static">${f.required ? '✅' : '❌'}</span></td>
                 <td class="cell-auto"><span class="cell-static">${DOMHelpers.escape(f.format || '—')}</span></td>
                 <td class="${f.description ? 'cell-auto' : 'cell-manual'}">
@@ -230,19 +238,11 @@ export class EditorUI {
             <tbody>${rows}</tbody></table></div>`;
     }
 
-    renderResponseBody(rs, idx) {
-        return `<p style="margin-bottom:12px;color:#8b949e;">
-            Код: <span class="response-code response-2xx">${rs.code}</span>
-            Схема: <code style="color:#58a6ff;">${DOMHelpers.escape(rs.schemaName)}</code>
-        </p>
-        ${this.renderFieldsTable(rs.fields)}`;
-    }
-
     renderExampleBlock(type) {
         const isReq = type === 'request';
         const value = isReq ? this.parsedData.exampleRequest : this.parsedData.exampleResponse;
         const binding = isReq ? 'parsedData.exampleRequest' : 'parsedData.exampleResponse';
-        
+
         return `<div class="info-note"><span class="info-note-icon">✏️</span><span>Пример сгенерирован из DTO. Замените значения на реалистичные.</span></div>
             <textarea class="block-editor highlight-manual" data-bind="${binding}" placeholder='{"field":"value"}'>${DOMHelpers.escape(value)}</textarea>`;
     }

@@ -1679,6 +1679,7 @@ async function parseEndpoint() {
         
         const result = await response.json();
         console.log('Parsed result:', result);
+        console.log('Full result object:', JSON.stringify(result, null, 2));
         
         // Set URL from selected endpoint
         result.url = selectedEndpoint;
@@ -1703,15 +1704,14 @@ function flattenFields(fields, depth = 0) {
     }
 
     for (const field of fields) {
-        result.push({
-            name: field.name,
-            type: field.type || '',
-            format: field.format || '',
-            description: field.description || '',
-            example: field.example || '',
-            required: field.required || false,
+        const flatField = {
+            ...field,
             depth: field.depth !== undefined ? field.depth : depth
-        });
+        };
+
+        delete flatField.children;
+
+        result.push(flatField);
 
         if (field.children && field.children.length > 0) {
             const nested = flattenFields(field.children, depth + 1);
@@ -1851,7 +1851,7 @@ function generateMarkdown(data) {
     // 2. Request
     if (data.requestFields && data.requestFields.length > 0) {
         md += '## 2. Request\n\n';
-        md += `### Request Body\n\n**Схема:** \`${escapeHtml(data.requestSchemaName || 'request')}\`\n\n`;
+        md += `### Request Body\n\n**Схема:** \`${escapeHtml(data.requestSchemaName || 'Unknown')}\`\n\n`;
         md += fieldsToMarkdownTable(data.requestFields);
         
         if (data.exampleRequest) {
@@ -2137,7 +2137,7 @@ function displayParsedData(data) {
                 <span class="section-chevron">▼</span>
             </div>
             <div class="section-body">
-                <p style="margin-bottom:12px;color:var(--text-secondary);">Схема: <code style="color:var(--accent-blue);">${escapeHtml(data.requestSchemaName || 'request')}</code></p>
+                <p style="margin-bottom:12px;color:var(--text-secondary);">Схема: <code style="color:var(--accent-blue);">${escapeHtml(data.requestSchemaName || 'Unknown')}</code></p>
                 ${renderFieldsTable(data.requestFields, true)}
             </div>
         </div>

@@ -232,6 +232,7 @@ public class EmbeddedWebServer {
             json.append("\"operationId\":\"").append(escapeJson(parsed.getOperationId() != null ? parsed.getOperationId() : "")).append("\",");
             json.append("\"tag\":\"").append(escapeJson(parsed.getTag() != null ? parsed.getTag() : "")).append("\",");
             json.append("\"summary\":\"").append(escapeJson(parsed.getSummary() != null ? parsed.getSummary() : "")).append("\",");
+            json.append("\"requestSchemaName\":\"").append(escapeJson(parsed.getRequestSchemaName() != null ? parsed.getRequestSchemaName() : "")).append("\",");
             
             // Request fields
             json.append("\"requestFields\":[");
@@ -267,13 +268,14 @@ public class EmbeddedWebServer {
             json.append("\"required\":").append(f.isRequired()).append(",");
             json.append("\"depth\":").append(f.getDepth()).append(",");
             json.append("\"hasChildren\":").append(f.hasChildren());
-            
+            if (f.getRefName() != null && !f.getRefName().isEmpty()) {
+                json.append(",\"refName\":\"").append(escapeJson(f.getRefName())).append("\"");
+            }
             if (f.hasChildren()) {
                 json.append(",\"children\":[");
                 appendFieldsJson(json, f.getChildren());
                 json.append("]");
             }
-            
             json.append("}");
         }
     }

@@ -7,10 +7,14 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 
+import org.yaml.snakeyaml.Yaml;
+import java.util.Map;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -20,7 +24,7 @@ import java.util.regex.Pattern;
  */
 public class YamlEndpointParser {
     private static final Logger LOG = Logger.getInstance(YamlEndpointParser.class);
-    private static final Pattern REF_PATTERN = Pattern.compile("\\$ref:\\s*['\"]?([^'\"\\s]+)['\"]?");
+    private static final Pattern REF_PATTERN = Pattern.compile("\\$ref\\s*:\\s*['\"]?([^'\"\\s]+)['\"]?");
     
     private final Project project;
     
@@ -39,57 +43,101 @@ public class YamlEndpointParser {
         if (baseDir == null) {
             throw new IOException("Project directory not found");
         }
-        
         LOG.info("Parsing endpoint: projectRoot=" + projectRoot + ", endpointPath=" + endpointPath + ", method=" + method);
         LOG.info("Base directory: " + baseDir.getPath());
-        
-        // projectRoot is path to openapi.yaml, we need the parent directory
         VirtualFile openapiFile = baseDir.findFileByRelativePath(projectRoot);
         if (openapiFile == null) {
             throw new IOException("OpenAPI file not found: " + projectRoot);
         }
-        
         VirtualFile apiRootDir = openapiFile.getParent();
         if (apiRootDir == null) {
             throw new IOException("Cannot get parent directory of openapi.yaml");
         }
-        
-        // Clean up endpointPath (remove ./ prefix if present)
         String cleanPath = endpointPath.startsWith("./") ? endpointPath.substring(2) : endpointPath;
-        
-        // Find endpoint file relative to openapi.yaml parent
         VirtualFile endpointFile = apiRootDir.findFileByRelativePath(cleanPath);
         if (endpointFile == null) {
             String fullPath = apiRootDir.getPath() + "/" + cleanPath;
             LOG.error("Endpoint file not found: " + cleanPath + " (full path: " + fullPath + ")");
             throw new IOException("Endpoint file not found: " + cleanPath + " (full path: " + fullPath + ")");
         }
-        
         LOG.info("Found endpoint file: " + endpointFile.getPath());
-        
         String content = new String(endpointFile.contentsToByteArray(), endpointFile.getCharset());
-        
         ParsedEndpoint result = new ParsedEndpoint();
         result.setMethod(method.toUpperCase());
-        
-        // Extract method section
-        String methodSection = extractMethodSection(content, method);
-        if (methodSection == null) {
+        // --- SnakeYAML: load full YAML ---
+        Yaml yaml = new Yaml();
+        Map<String, Object> root = yaml.load(content);
+        if (root == null) {
+            throw new IOException("YAML root is null");
+        }
+        Map<String, Object> methodMap = (Map<String, Object>) root.get(method.toLowerCase());
+        if (methodMap == null) {
             throw new IOException("Method " + method + " not found in file");
         }
-        
         // Parse metadata
-        parseMetadata(methodSection, result);
-        
-        // Parse request body
-        parseRequestBody(methodSection, endpointFile.getParent(), result);
-        
-        // Parse responses
+        parseMetadataFromMap(methodMap, result);
+        // Parse request body (только SnakeYAML)
+        parseRequestBody(methodMap, endpointFile.getParent(), result);
+        // Parse responses (оставим старый способ)
+        String methodSection = extractMethodSection(content, method);
         parseResponses(methodSection, endpointFile.getParent(), result);
-        
         LOG.info("Parsed endpoint: " + method + " with " + result.getRequestFields().size() + " request fields");
-        
         return result;
+    }
+
+    // Новый метод для метаданных
+    private void parseMetadataFromMap(Map<String, Object> methodMap, ParsedEndpoint result) {
+        if (methodMap.containsKey("tags")) {
+            Object tagsObj = methodMap.get("tags");
+            if (tagsObj instanceof Iterable) {
+                Iterable<?> tags = (Iterable<?>) tagsObj;
+                for (Object tag : tags) {
+                    result.setTag(tag.toString());
+                    break;
+                }
+            }
+        }
+        if (methodMap.containsKey("summary")) {
+            result.setSummary(methodMap.get("summary").toString());
+        }
+        if (methodMap.containsKey("operationId")) {
+            result.setOperationId(methodMap.get("operationId").toString());
+        }
+    }
+
+    // Новый parseRequestBody
+    private void parseRequestBody(Map<String, Object> methodMap, VirtualFile baseDir, ParsedEndpoint result) {
+        LOG.info("Parsing request body for method map (SnakeYAML)");
+        if (!methodMap.containsKey("requestBody")) {
+            LOG.info("No requestBody section found");
+            result.setRequestSchemaName("Unknown");
+            return;
+        }
+        Map<String, Object> requestBody = (Map<String, Object>) methodMap.get("requestBody");
+        if (requestBody.containsKey("content")) {
+            Map<String, Object> content = (Map<String, Object>) requestBody.get("content");
+            if (content.containsKey("application/json")) {
+                Map<String, Object> appJson = (Map<String, Object>) content.get("application/json");
+                if (appJson.containsKey("schema")) {
+                    Map<String, Object> schema = (Map<String, Object>) appJson.get("schema");
+                    Object refObj = schema.get("$ref");
+                    if (refObj != null) {
+                        String refPath = refObj.toString();
+                        LOG.info("Found request schema ref: " + refPath);
+                        String schemaName = extractSchemaName(refPath);
+                        LOG.info("Extracted schema name: " + schemaName);
+                        result.setRequestSchemaName(schemaName);
+                        // Parse schema (оставляем старый вызов)
+                        List<Field> fields = parseSchemaFromRef(refPath, baseDir, 0, new HashSet<>());
+                        result.setRequestFields(fields);
+                        LOG.info("Parsed " + fields.size() + " request fields");
+                        return;
+                    }
+                }
+            }
+        }
+        LOG.info("No $ref found in requestBody");
+        result.setRequestSchemaName("Unknown");
     }
     
     private String extractMethodSection(String content, String method) {
@@ -128,53 +176,6 @@ public class YamlEndpointParser {
         }
         
         return section.toString();
-    }
-    
-    private void parseMetadata(String methodSection, ParsedEndpoint result) {
-        // Tags
-        Matcher tagMatch = Pattern.compile("tags:\\s*\\n\\s*-\\s*(.+)").matcher(methodSection);
-        if (tagMatch.find()) {
-            result.setTag(tagMatch.group(1).trim());
-        }
-        
-        // Summary
-        Matcher summaryMatch = Pattern.compile("summary:\\s*(.+)").matcher(methodSection);
-        if (summaryMatch.find()) {
-            result.setSummary(summaryMatch.group(1).trim());
-        }
-        
-        // OperationId
-        Matcher opMatch = Pattern.compile("operationId:\\s*(.+)").matcher(methodSection);
-        if (opMatch.find()) {
-            result.setOperationId(opMatch.group(1).trim());
-        }
-    }
-    
-    private void parseRequestBody(String methodSection, VirtualFile baseDir, ParsedEndpoint result) {
-        LOG.info("Parsing request body for method section");
-        // Find requestBody section
-        int reqBodyIdx = methodSection.indexOf("requestBody:");
-        if (reqBodyIdx == -1) {
-            LOG.info("No requestBody section found");
-            return;
-        }
-        
-        String afterReqBody = methodSection.substring(reqBodyIdx);
-        LOG.info("Found requestBody section: " + afterReqBody.substring(0, Math.min(100, afterReqBody.length())));
-        
-        // Find schema $ref
-        Matcher refMatcher = REF_PATTERN.matcher(afterReqBody);
-        if (refMatcher.find()) {
-            String refPath = refMatcher.group(1);
-            LOG.info("Found request schema ref: " + refPath);
-            
-            // Parse schema
-            List<Field> fields = parseSchemaFromRef(refPath, baseDir, 0, new HashSet<>());
-            result.setRequestFields(fields);
-            LOG.info("Parsed " + fields.size() + " request fields");
-        } else {
-            LOG.info("No $ref found in requestBody");
-        }
     }
     
     private void parseResponses(String methodSection, VirtualFile baseDir, ParsedEndpoint result) {
@@ -321,6 +322,9 @@ public class YamlEndpointParser {
                     Matcher refMatcher2 = REF_PATTERN.matcher(trimmed);
                     if (refMatcher2.find()) {
                         String refPath = refMatcher2.group(1);
+                        // Устанавливаем refName для текущего поля
+                        String dtoName = extractSchemaName(refPath);
+                        currentField.setRefName(dtoName);
                         List<Field> nestedFields = parseSchemaFromRef(refPath, baseDir, depth + 1, new HashSet<>(visited));
                         for (Field nested : nestedFields) {
                             nested.setDepth(depth + 1);
@@ -338,5 +342,30 @@ public class YamlEndpointParser {
 
         LOG.info("Parsed " + fields.size() + " fields from schema");
         return fields;
+    }
+    
+    private String extractSchemaName(String refPath) {
+        // Extract name from ref path
+        // Examples:
+        // "#/components/schemas/AvayaCallRedirectDto" -> "AvayaCallRedirectDto"
+        // "../schemas/AvayaCallRedirectDto.yaml" -> "AvayaCallRedirectDto"
+        // "AvayaCallRedirectDto" -> "AvayaCallRedirectDto"
+        
+        String name = refPath;
+        
+        // Remove file extension if present
+        if (name.endsWith(".yaml")) {
+            name = name.substring(0, name.length() - 5);
+        } else if (name.endsWith(".yml")) {
+            name = name.substring(0, name.length() - 4);
+        }
+        
+        // Get only the last component (after last / or #)
+        int lastSlash = name.lastIndexOf('/');
+        if (lastSlash != -1) {
+            name = name.substring(lastSlash + 1);
+        }
+        
+        return name;
     }
 }

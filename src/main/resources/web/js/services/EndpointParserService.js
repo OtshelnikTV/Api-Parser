@@ -40,6 +40,8 @@ export class EndpointParserService {
             parsedData.operationId = result.operationId || '';
             parsedData.tag = result.tag || '';
             parsedData.summary = result.summary || '';
+            // Добавить заполнение имени схемы DTO
+            parsedData.requestSchemaName = result.requestSchemaName || '';
             
             // Request fields
             if (result.requestFields) {
