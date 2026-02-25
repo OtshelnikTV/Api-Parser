@@ -1,0 +1,5 @@
+apis:
+  ffl-main:
+    root: ffl-main/openapi.yaml
+  ffl-integrations:
+    root: ffl-integrations/openapi.yaml

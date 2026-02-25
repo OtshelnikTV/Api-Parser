@@ -1,0 +1,2099 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Doc Parser</title>
+    <style>
+:root {
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --bg-input: #0d1117;
+  --text-primary: #c9d1d9;
+  --text-secondary: #8b949e;
+  --text-tertiary: #6e7681;
+  --border-primary: #30363d;
+  --border-secondary: #21262d;
+  --accent-blue: #58a6ff;
+  --accent-green: #3fb950;
+  --accent-red: #f85149;
+  --accent-yellow: #d29922;
+  --accent-purple: #d291ff;
+}
+
+[data-theme="light-pink"] {
+  --bg-primary: #faf9f7;
+  --bg-secondary: #fff5f7;
+  --bg-tertiary: #ffe8ef;
+  --bg-input: #fff5f7;
+  --text-primary: #3e1f47;
+  --text-secondary: #7d5f82;
+  --text-tertiary: #9e7fa8;
+  --border-primary: #f0d4e3;
+  --border-secondary: #e8c2d9;
+  --accent-blue: #c84c8f;
+  --accent-green: #a08c2a;
+  --accent-red: #d94d4d;
+  --accent-yellow: #c88b2d;
+  --accent-purple: #8a4d9e;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+body {
+  overflow: hidden;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.theme-toggle {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 20px;
+  z-index: 9999;
+  transition: all 0.3s;
+}
+
+.theme-toggle:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--accent-blue);
+  transform: scale(1.1);
+}
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9998;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid var(--border-primary);
+  border-top-color: var(--accent-blue);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-text {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.loading-progress {
+  width: 200px;
+  height: 2px;
+  background: var(--border-primary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.loading-progress::after {
+  content: '';
+  display: block;
+  width: 30%;
+  height: 100%;
+  background: var(--accent-blue);
+  animation: slide 1.5s infinite;
+}
+
+@keyframes slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 16px;
+  padding: 40px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 100px rgba(0, 0, 0, 0.4);
+}
+
+.step-indicator {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 32px;
+  justify-content: center;
+}
+
+.step-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--border-primary);
+  cursor: pointer;
+}
+
+.step-dot.active {
+  background: var(--accent-blue);
+  box-shadow: 0 0 0 6px rgba(88, 166, 255, 0.2);
+}
+
+.step-dot.done {
+  background: var(--accent-green);
+}
+
+.modal-icon {
+  display: block;
+  font-size: 48px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.modal h2 {
+  font-size: 24px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.modal p {
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.modal code {
+  background: var(--bg-tertiary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--accent-blue);
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.project-item {
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.project-item:hover {
+  background: var(--bg-primary);
+  border-color: var(--accent-blue);
+}
+
+.project-item.selected {
+  background: rgba(88, 166, 255, 0.15);
+  border-color: var(--accent-blue);
+}
+
+.project-name {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.project-path {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-family: monospace;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.search-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.request-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.request-item {
+  padding: 12px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.request-item:hover {
+  background: var(--bg-primary);
+  border-color: var(--accent-blue);
+}
+
+.request-item.selected {
+  background: rgba(88, 166, 255, 0.15);
+  border-color: var(--accent-blue);
+}
+
+.request-item-name {
+  font-weight: 500;
+}
+
+.request-item-methods {
+  display: flex;
+  gap: 6px;
+}
+
+.method-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.method-tag-get {
+  background: rgba(63, 185, 80, 0.2);
+  color: var(--accent-green);
+}
+
+.method-tag-post {
+  background: rgba(88, 166, 255, 0.2);
+  color: var(--accent-blue);
+}
+
+.method-tag-put {
+  background: rgba(210, 153, 34, 0.2);
+  color: var(--accent-yellow);
+}
+
+.method-tag-delete {
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--accent-red);
+}
+
+.method-tag-patch {
+  background: rgba(210, 145, 255, 0.2);
+  color: var(--accent-purple);
+}
+
+#method-selector {
+  gap: 12px;
+}
+
+.method-btn {
+  padding: 10px 20px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+  font-size: 14px;
+}
+
+.method-btn:hover {
+  background: var(--bg-primary);
+  border-color: var(--accent-blue);
+}
+
+.method-btn-get {
+  border-color: var(--accent-green);
+}
+
+.method-btn-get.selected {
+  background: rgba(63, 185, 80, 0.2);
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+}
+
+.method-btn-post {
+  border-color: var(--accent-blue);
+}
+
+.method-btn-post.selected {
+  background: rgba(88, 166, 255, 0.2);
+  border-color: var(--accent-blue);
+  color: var(--accent-blue);
+}
+
+.method-btn-put {
+  border-color: var(--accent-yellow);
+}
+
+.method-btn-put.selected {
+  background: rgba(210, 153, 34, 0.2);
+  border-color: var(--accent-yellow);
+  color: var(--accent-yellow);
+}
+
+.method-btn-delete {
+  border-color: var(--accent-red);
+}
+
+.method-btn-delete.selected {
+  background: rgba(248, 81, 73, 0.2);
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.method-btn-patch {
+  border-color: var(--accent-purple);
+}
+
+.method-btn-patch.selected {
+  background: rgba(210, 145, 255, 0.2);
+  border-color: var(--accent-purple);
+  color: var(--accent-purple);
+}
+
+.btn {
+  padding: 8px 16px;
+  border: 1px solid var(--border-primary);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--bg-primary);
+  border-color: var(--accent-blue);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: var(--bg-primary);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #79c0ff;
+  border-color: #79c0ff;
+}
+
+.btn-blue {
+  background: var(--accent-blue);
+  border-color: var(--accent-blue);
+  color: var(--bg-primary);
+}
+
+.btn-lg {
+  padding: 12px 24px;
+  font-size: 16px;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header h1 {
+  font-size: 24px;
+  color: var(--text-primary);
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.status-bar {
+  padding: 8px 24px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--accent-green);
+  border-radius: 50%;
+}
+
+.status-path {
+  color: var(--accent-blue);
+  font-family: monospace;
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border-primary);
+  flex-wrap: wrap;
+  background: var(--bg-secondary);
+  font-size: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.legend-color.auto {
+  background: rgba(63, 185, 80, 0.3);
+  border: 1px solid var(--accent-green);
+}
+
+.legend-color.manual {
+  background: rgba(88, 166, 255, 0.3);
+  border: 1px solid var(--accent-blue);
+}
+
+.legend-color.required {
+  background: rgba(248, 81, 73, 0.3);
+  border: 1px solid var(--accent-red);
+}
+
+#editor-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.template-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.section-header {
+  padding: 16px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+}
+
+.section-header:hover {
+  background: var(--bg-primary);
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.section-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.badge-auto {
+  background: rgba(63, 185, 80, 0.2);
+  color: var(--accent-green);
+}
+
+.badge-manual {
+  background: rgba(88, 166, 255, 0.2);
+  color: var(--accent-blue);
+}
+
+.badge-required {
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--accent-red);
+}
+
+.section-chevron {
+  color: var(--text-secondary);
+}
+
+.section-body {
+  padding: 16px;
+}
+
+.section-body.collapsed-body {
+  display: none;
+}
+
+.kv-grid {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.kv-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 8px 0;
+}
+
+.kv-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cell-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.cell-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+}
+
+.cell-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.cell-static {
+  color: var(--text-secondary);
+  font-size: 13px;
+  word-break: break-word;
+}
+
+textarea.cell-input {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.cell-auto {
+  background: rgba(63, 185, 80, 0.1);
+}
+
+.cell-manual {
+  background: rgba(88, 166, 255, 0.1);
+}
+
+.cell-required {
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.method-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.method-get {
+  background: rgba(63, 185, 80, 0.2);
+  color: var(--accent-green);
+}
+
+.method-post {
+  background: rgba(88, 166, 255, 0.2);
+  color: var(--accent-blue);
+}
+
+.method-put {
+  background: rgba(210, 153, 34, 0.2);
+  color: var(--accent-yellow);
+}
+
+.method-delete {
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--accent-red);
+}
+
+.method-patch {
+  background: rgba(210, 145, 255, 0.2);
+  color: var(--accent-purple);
+}
+
+.response-code {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 12px;
+  margin-right: 8px;
+}
+
+.response-2xx {
+  background: rgba(63, 185, 80, 0.2);
+  color: var(--accent-green);
+}
+
+.response-4xx {
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--accent-red);
+}
+
+.response-5xx {
+  background: rgba(210, 153, 34, 0.2);
+  color: var(--accent-yellow);
+}
+
+.table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+}
+
+.edit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.edit-table thead {
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.edit-table th {
+  padding: 12px 8px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--text-secondary);
+}
+
+.edit-table td {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.edit-table tbody tr:hover {
+  background: rgba(88, 166, 255, 0.05);
+}
+
+.edit-table tbody tr.nested-field {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.indent-marker {
+  color: var(--text-tertiary);
+  font-family: monospace;
+  font-size: 10px;
+}
+
+.block-editor {
+  width: 100%;
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  resize: vertical;
+  min-height: 120px;
+}
+
+.block-editor:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+}
+
+.highlight-auto {
+  border-color: var(--accent-green) !important;
+  background: rgba(63, 185, 80, 0.05) !important;
+}
+
+.highlight-manual {
+  border-color: var(--accent-blue) !important;
+  background: rgba(88, 166, 255, 0.05) !important;
+}
+
+.highlight-required {
+  border-color: var(--accent-red) !important;
+  background: rgba(248, 81, 73, 0.05) !important;
+}
+
+.mermaid-editor-container {
+  display: flex;
+  gap: 12px;
+  height: 400px;
+}
+
+.mermaid-editor-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mermaid-panel-header {
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mermaid-code-editor {
+  flex: 1;
+  padding: 12px;
+  background: var(--bg-input);
+  border: none;
+  color: var(--text-primary);
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  resize: none;
+  overflow-y: auto;
+}
+
+.mermaid-code-editor:focus {
+  outline: none;
+}
+
+.mermaid-preview-container {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mermaid-preview-empty {
+  color: var(--text-tertiary);
+  text-align: center;
+  font-size: 12px;
+}
+
+.mermaid-preview-error {
+  color: var(--accent-red);
+  padding: 12px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.mermaid-preview-content {
+  overflow: auto;
+}
+
+.mermaid-preview-content svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.dep-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.dep-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.dep-card-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dep-remove-btn {
+  background: none;
+  border: none;
+  color: var(--accent-red);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.dep-remove-btn:hover {
+  background: rgba(248, 81, 73, 0.2);
+}
+
+.add-row-btn {
+  padding: 10px 16px;
+  border: 1px dashed var(--border-primary);
+  background: transparent;
+  color: var(--accent-blue);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.add-row-btn:hover {
+  border-color: var(--accent-blue);
+  background: rgba(88, 166, 255, 0.1);
+}
+
+.generate-panel {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: var(--bg-secondary);
+}
+
+.generate-info {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.generate-info span {
+  color: var(--accent-red);
+  font-weight: 600;
+}
+
+#preview-modal pre {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+    </style>
+</head>
+<body>
+
+
+<!-- Theme Toggle Button -->
+<button id="theme-toggle" class="theme-toggle" title="Переключить тему">🌸</button>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" class="loading-overlay hidden">
+    <div class="loading-spinner"></div>
+    <div id="loading-text" class="loading-text">Загрузка...</div>
+    <div id="loading-progress" class="loading-progress"></div>
+</div>
+
+<!-- STEP 1: Project Selection -->
+<div id="setup-project" class="modal-overlay">
+    <div class="modal">
+        <div class="step-indicator">
+            <div class="step-dot active"></div>
+            <div class="step-dot"></div>
+            <div class="step-dot"></div>
+        </div>
+        <span class="modal-icon">📁</span>
+        <h2>Шаг 1: Выбор проекта</h2>
+        <p>Выберите проект из списка.<br>
+        <small style="color:var(--text-tertiary);">Проекты загружаются из текущего workspace</small></p>
+        
+        <!-- Project List -->
+        <div id="project-list-container" style="margin-bottom:16px;">
+            <h3 style="color:var(--text-secondary); font-size:14px; margin-bottom:10px;">Доступные проекты:</h3>
+            <div class="project-list" id="project-list"></div>
+        </div>
+        
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+            <button class="btn btn-primary btn-lg" id="btn-save-project" disabled>Далее →</button>
+        </div>
+    </div>
+</div>
+
+<!-- STEP 2: Request Selection -->
+<div id="setup-request" class="modal-overlay hidden">
+    <div class="modal" style="max-width:700px;">
+        <div class="step-indicator">
+            <div class="step-dot done"></div>
+            <div class="step-dot active"></div>
+            <div class="step-dot"></div>
+        </div>
+        <span class="modal-icon">🔍</span>
+        <h2>Шаг 2: Выбор запроса</h2>
+        <p>Выберите endpoint из списка.</p>
+        
+        <input type="text" class="search-input" id="request-search" placeholder="🔍 Поиск...">
+        <div class="request-list" id="request-list"></div>
+        
+        <div style="display:flex;gap:10px;justify-content:space-between;margin-top:16px;flex-wrap:wrap;">
+            <button class="btn" id="btn-back-to-project">← Сменить проект</button>
+            <button class="btn btn-primary btn-lg" id="btn-next-method" disabled>Далее →</button>
+        </div>
+    </div>
+</div>
+
+<!-- STEP 3: Method Selection -->
+<div id="setup-method" class="modal-overlay hidden">
+    <div class="modal" style="max-width:600px;">
+        <div class="step-indicator">
+            <div class="step-dot done"></div>
+            <div class="step-dot done"></div>
+            <div class="step-dot active"></div>
+        </div>
+        <span class="modal-icon">🎯</span>
+        <h2>Шаг 3: Выбор метода</h2>
+        <p>Endpoint <code id="selected-endpoint-name"></code> поддерживает несколько методов. Выберите нужный:</p>
+        
+        <div id="method-selector" style="display:flex;gap:12px;flex-wrap:wrap;padding:20px;justify-content:center;"></div>
+        
+        <div style="display:flex;gap:10px;justify-content:space-between;margin-top:24px;">
+            <button class="btn" id="btn-back-to-requests">← К списку запросов</button>
+            <button class="btn btn-primary btn-lg" id="btn-parse" disabled>🚀 Парсить</button>
+        </div>
+    </div>
+</div>
+
+<!-- EDITOR -->
+<div id="main-editor" class="app-container hidden">
+    <div class="header">
+        <h1>📋 API Doc Parser</h1>
+        <div class="header-actions">
+            <button class="btn" id="btn-editor-back-to-requests">📂 Другой запрос</button>
+            <button class="btn" id="btn-editor-back-to-project">⚙️ Сменить проект</button>
+        </div>
+    </div>
+    
+    <div class="status-bar">
+        <div class="status-dot"></div>
+        <span id="status-text">Загружено</span>
+        <span class="status-path" id="status-path"></span>
+    </div>
+    
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color auto"></div>
+            <span>Авто (из YAML)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color manual"></div>
+            <span>Проверить</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color required"></div>
+            <span>Заполнить вручную</span>
+        </div>
+    </div>
+    
+    <div id="editor-content"></div>
+    
+    <div class="generate-panel">
+        <div class="generate-info">
+            Незаполненных: <span id="unfilled-count">0</span>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn btn-blue btn-lg" id="btn-preview-markdown">👁️ Предпросмотр</button>
+            <button class="btn btn-primary btn-lg" id="btn-generate-save">📄 Сформировать read.md</button>
+        </div>
+    </div>
+</div>
+
+<!-- PREVIEW MODAL -->
+<div id="preview-modal" class="modal-overlay hidden" style="align-items:stretch;">
+    <div style="background:var(--bg-secondary);border:1px solid var(--border-primary);border-radius:16px;margin:24px;flex:1;display:flex;flex-direction:column;overflow:hidden;">
+        <div style="padding:16px 24px;border-bottom:1px solid var(--border-primary);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <h2 style="color:var(--accent-blue);font-size:18px;">Предпросмотр read.md</h2>
+            <div style="display:flex;gap:10px;">
+                <button class="btn btn-primary" id="btn-preview-save">📄 Сохранить</button>
+                <button class="btn" id="btn-close-preview">✕ Закрыть</button>
+            </div>
+        </div>
+        <div style="flex:1;overflow:auto;padding:24px;">
+            <pre id="preview-content" style="font-family:'Cascadia Code','Fira Code','Consolas',monospace;font-size:13px;line-height:1.5;white-space:pre-wrap;color:var(--text-primary);"></pre>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({ 
+        startOnLoad: false,
+        theme: 'dark',
+        themeVariables: {
+            darkMode: true,
+            background: '#0d1117',
+            primaryColor: '#58a6ff',
+            primaryTextColor: '#c9d1d9',
+            primaryBorderColor: '#30363d',
+            lineColor: '#8b949e',
+            secondaryColor: '#21262d',
+            tertiaryColor: '#161b22'
+        }
+    });
+</script>
+<script>
+// Global variables
+let selectedProject = null;
+let selectedEndpoint = null;
+let selectedEndpointFilePath = null;
+let selectedMethod = null;
+let currentData = null;
+let endpoints = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Application started');
+    
+    // Load saved theme
+    const savedTheme = localStorage.getItem('app-theme');
+    if (savedTheme === 'light-pink') {
+        document.documentElement.setAttribute('data-theme', 'light-pink');
+        document.getElementById('theme-toggle').textContent = '🌙';
+    }
+    
+    // Setup event listeners
+    setupEventListeners();
+    
+    // Load projects
+    loadProjects();
+});
+
+function displayProjects(projects) {
+    const container = document.getElementById('project-list');
+    if (!container) {
+        console.error('project-list element not found');
+        return;
+    }
+    
+    container.innerHTML = '';
+    
+    if (projects.length === 0) {
+        container.innerHTML = '<div>No projects found</div>';
+        return;
+    }
+    
+    projects.forEach(project => {
+        const item = document.createElement('div');
+        item.className = 'project-item';
+        item.dataset.projectName = project.name;
+        item.innerHTML = `
+            <div class="project-name">${escapeHtml(project.name)}</div>
+            <div class="project-path">${escapeHtml(project.rootPath)}</div>
+        `;
+        item.onclick = () => selectProject(project);
+        container.appendChild(item);
+    });
+}
+
+function selectProject(project) {
+    console.log('Selected project:', project.name);
+    
+    document.querySelectorAll('.project-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    
+    const selectedItem = document.querySelector(`[data-project-name="${project.name}"]`);
+    if (selectedItem) {
+        selectedItem.classList.add('selected');
+    }
+    
+    selectedProject = project;
+    document.getElementById('btn-save-project').disabled = false;
+}
+
+async function loadProjects() {
+    try {
+        console.log('Loading projects...');
+        const response = await fetch('/api/projects');
+        const projects = await response.json();
+        console.log('Projects loaded:', projects);
+        displayProjects(projects);
+    } catch (error) {
+        console.error('Error loading projects:', error);
+        document.getElementById('project-list').innerHTML = '<div style="color:red;">Error loading projects: ' + error.message + '</div>';
+    }
+}
+
+function setupEventListeners() {
+    // Project selection
+    document.getElementById('btn-save-project').addEventListener('click', () => {
+        if (selectedProject) {
+            showRequestSelector();
+        }
+    });
+    
+    // Back to project
+    document.getElementById('btn-back-to-project').addEventListener('click', () => {
+        showProjectSelector();
+    });
+    
+    // Request search
+    document.getElementById('request-search').addEventListener('input', (e) => {
+        displayEndpoints(e.target.value);
+    });
+    
+    // Next to method
+    document.getElementById('btn-next-method').addEventListener('click', () => {
+        if (selectedEndpoint) {
+            showMethodSelector();
+        }
+    });
+    
+    // Back to requests
+    document.getElementById('btn-back-to-requests').addEventListener('click', () => {
+        showRequestSelector();
+    });
+    
+    // Parse endpoint
+    document.getElementById('btn-parse').addEventListener('click', () => {
+        if (selectedMethod) {
+            parseEndpoint();
+        }
+    });
+    
+    // Editor navigation
+    document.getElementById('btn-editor-back-to-requests').addEventListener('click', () => {
+        selectedMethod = null;
+        showRequestSelector();
+    });
+    
+    document.getElementById('btn-editor-back-to-project').addEventListener('click', () => {
+        selectedEndpoint = null;
+        selectedMethod = null;
+        showProjectSelector();
+    });
+    
+    // Preview modal
+    document.getElementById('btn-preview-markdown').addEventListener('click', () => {
+        showPreviewModal(currentData);
+    });
+
+    document.getElementById('btn-generate-save').addEventListener('click', () => {
+        if (currentData) {
+            saveMarkdownFile(currentData);
+        }
+    });
+    
+    document.getElementById('btn-close-preview').addEventListener('click', () => {
+        document.getElementById('preview-modal').classList.add('hidden');
+    });
+    
+    document.getElementById('btn-preview-save').addEventListener('click', () => {
+        if (currentData) {
+            saveMarkdownFile(currentData);
+            document.getElementById('preview-modal').classList.add('hidden');
+        }
+    });
+    
+    // Theme toggle
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', toggleTheme);
+    }
+}
+
+function showProjectSelector() {
+    hideAllScreens();
+    document.getElementById('setup-project').classList.remove('hidden');
+}
+
+function showRequestSelector() {
+    hideAllScreens();
+    document.getElementById('setup-request').classList.remove('hidden');
+    loadEndpoints();
+}
+
+function showMethodSelector() {
+    hideAllScreens();
+    document.getElementById('setup-method').classList.remove('hidden');
+    displayMethods();
+}
+
+function showEditor() {
+    hideAllScreens();
+    document.getElementById('main-editor').classList.remove('hidden');
+}
+
+function hideAllScreens() {
+    document.getElementById('setup-project').classList.add('hidden');
+    document.getElementById('setup-request').classList.add('hidden');
+    document.getElementById('setup-method').classList.add('hidden');
+    document.getElementById('main-editor').classList.add('hidden');
+}
+
+async function loadEndpoints() {
+    if (!selectedProject) return;
+    
+    try {
+        const response = await fetch(`/api/endpoints?project=${encodeURIComponent(selectedProject.name)}&rootPath=${encodeURIComponent(selectedProject.rootPath)}`);
+        endpoints = await response.json();
+        console.log('Endpoints loaded:', endpoints);
+        displayEndpoints();
+    } catch (error) {
+        console.error('Error loading endpoints:', error);
+    }
+}
+
+function displayEndpoints(filter = '') {
+    const container = document.getElementById('request-list');
+    const filtered = endpoints.filter(ep => 
+        ep.apiPath.toLowerCase().includes(filter.toLowerCase())
+    );
+    
+    container.innerHTML = '';
+    
+    if (filtered.length === 0) {
+        container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-tertiary);">Ничего не найдено</div>';
+        return;
+    }
+    
+    filtered.forEach(ep => {
+        const item = document.createElement('div');
+        item.className = `request-item ${selectedEndpoint === ep.apiPath ? 'selected' : ''}`;
+        item.dataset.request = ep.apiPath;
+        item.dataset.filePath = ep.filePath;
+        
+        const methodsHtml = ep.methods.map(m => 
+            `<span class="method-tag method-tag-${m}">${m}</span>`
+        ).join('');
+        
+        item.innerHTML = `
+            <span class="request-item-name">${escapeHtml(ep.apiPath)}</span>
+            <div class="request-item-methods">${methodsHtml}</div>
+        `;
+        
+        item.onclick = () => selectEndpoint(ep.apiPath, ep.filePath);
+        container.appendChild(item);
+    });
+}
+
+function selectEndpoint(apiPath, filePath) {
+    console.log('Selected endpoint:', apiPath, 'file:', filePath);
+    selectedEndpoint = apiPath;
+    selectedEndpointFilePath = filePath;
+    
+    document.querySelectorAll('.request-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    
+    const selectedItem = document.querySelector(`[data-request="${apiPath}"]`);
+    if (selectedItem) {
+        selectedItem.classList.add('selected');
+    }
+    
+    document.getElementById('btn-next-method').disabled = false;
+}
+
+function displayMethods() {
+    const container = document.getElementById('method-selector');
+    const endpoint = endpoints.find(ep => ep.apiPath === selectedEndpoint);
+    
+    if (!endpoint) return;
+    
+    document.getElementById('selected-endpoint-name').textContent = selectedEndpoint;
+    
+    container.innerHTML = '';
+    
+    endpoint.methods.forEach(method => {
+        const button = document.createElement('button');
+        button.className = `method-btn method-btn-${method} ${selectedMethod === method ? 'selected' : ''}`;
+        button.textContent = method.toUpperCase();
+        button.onclick = () => selectMethod(method);
+        container.appendChild(button);
+    });
+}
+
+function selectMethod(method) {
+    console.log('Selected method:', method);
+    selectedMethod = method;
+    
+    document.querySelectorAll('.method-btn').forEach(btn => {
+        btn.classList.remove('selected');
+    });
+    
+    const selectedBtn = Array.from(document.querySelectorAll('.method-btn'))
+        .find(btn => btn.textContent === method.toUpperCase());
+    if (selectedBtn) {
+        selectedBtn.classList.add('selected');
+    }
+    
+    document.getElementById('btn-parse').disabled = false;
+}
+
+async function parseEndpoint() {
+    if (!selectedProject || !selectedEndpoint || !selectedMethod) return;
+    
+    try {
+        const response = await fetch('/api/parse-endpoint', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                projectRoot: selectedProject.rootPath,
+                endpointPath: selectedEndpointFilePath,
+                method: selectedMethod
+            })
+        });
+        
+        const result = await response.json();
+        console.log('Parsed result:', result);
+        
+        currentData = result;
+        
+        showEditor();
+        displayParsedData(result);
+        updateUnfilledCount(result);
+        
+    } catch (error) {
+        console.error('Error parsing endpoint:', error);
+        alert('Error parsing endpoint: ' + error.message);
+    }
+}
+
+function flattenFields(fields, depth = 0) {
+    let result = [];
+
+    if (!fields || !Array.isArray(fields)) {
+        return result;
+    }
+
+    for (const field of fields) {
+        result.push({
+            name: field.name,
+            type: field.type || '',
+            format: field.format || '',
+            description: field.description || '',
+            example: field.example || '',
+            required: field.required || false,
+            depth: field.depth !== undefined ? field.depth : depth
+        });
+
+        if (field.children && field.children.length > 0) {
+            const nested = flattenFields(field.children, depth + 1);
+            result = result.concat(nested);
+        }
+    }
+
+    return result;
+}
+
+function renderFieldsTable(fields, showSource = false) {
+    if (!fields || fields.length === 0) {
+        return '<div style="padding: 24px; text-align: center; color: var(--text-tertiary);">ℹ️ Поля не найдены</div>';
+    }
+
+    const flatFields = flattenFields(fields);
+    
+    let headers = '<th>Поле</th><th>Тип</th><th>Обяз.</th><th>Формат</th><th>Описание</th><th>Пример</th>';
+    if (showSource) {
+        headers += '<th>Источник</th>';
+    }
+
+    let tableHtml = `
+        <div class="table-wrapper">
+            <table class="edit-table">
+                <thead>
+                    <tr>${headers}</tr>
+                </thead>
+                <tbody>
+    `;
+
+    flatFields.forEach((field) => {
+        const indent = field.depth * 24;
+        const isNested = field.depth > 0;
+        const rowClass = isNested ? ' nested-field' : '';
+        
+        let depthMarker = '';
+        if (isNested) {
+            const markers = [];
+            for (let d = 1; d < field.depth; d++) {
+                markers.push('│&nbsp;&nbsp;');
+            }
+            markers.push('├─');
+            depthMarker = '<span class="indent-marker">' + markers.join('') + ' </span>';
+        }
+
+        const nameDisplay = `<div style="margin-left:${indent}px">${depthMarker}<code>${escapeHtml(field.name)}</code></div>`;
+        const requiredMark = field.required ? '✅' : '❌';
+        
+        let sourceCell = '';
+        if (showSource) {
+            sourceCell = `<td class="cell-required">
+                    <input type="text" class="cell-input" placeholder="📥 Источник" value="">
+                </td>`;
+        }
+
+        tableHtml += `<tr class="${rowClass}">
+                <td class="cell-auto"><span class="cell-static">${nameDisplay}</span></td>
+                <td class="cell-auto"><span class="cell-static"><code>${escapeHtml(field.type || '—')}</code></span></td>
+                <td class="cell-auto"><span class="cell-static">${requiredMark}</span></td>
+                <td class="cell-auto"><span class="cell-static"><code>${escapeHtml(field.format || '—')}</code></span></td>
+                <td class="${field.description ? 'cell-auto' : 'cell-manual'}">
+                    <span class="cell-static">${escapeHtml(field.description || '—')}</span>
+                </td>
+                <td class="${field.example ? 'cell-auto' : 'cell-manual'}">
+                    <span class="cell-static">${escapeHtml(field.example || '—')}</span>
+                </td>
+                ${sourceCell}
+            </tr>`;
+    });
+
+    tableHtml += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    return tableHtml;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function attachMermaidHandlers() {
+    const editor = document.getElementById('mermaid-code-editor');
+    const preview = document.getElementById('mermaid-preview');
+    
+    if (!editor || !preview) return;
+
+    let debounceTimer;
+    const updatePreview = async () => {
+        const code = editor.value.trim();
+        
+        if (!code) {
+            preview.innerHTML = '<div class="mermaid-preview-empty">Введите код диаграммы слева...</div>';
+            return;
+        }
+
+        try {
+            preview.innerHTML = '';
+            const id = 'mermaid-' + Date.now();
+            const { svg } = await mermaid.render(id, code);
+            preview.innerHTML = `<div class="mermaid-preview-content">${svg}</div>`;
+        } catch (error) {
+            preview.innerHTML = `<div class="mermaid-preview-error">
+                <strong>Ошибка синтаксиса:</strong><br>
+                ${escapeHtml(error.message || 'Проверьте код диаграммы')}
+            </div>`;
+        }
+    };
+
+    editor.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(updatePreview, 500);
+    });
+
+    await updatePreview();
+}
+
+function generateMarkdown(data) {
+    let md = `# ${escapeHtml(data.operationId || 'endpoint')} — ${escapeHtml(data.summary || 'Описание')}\n\n`;
+
+    md += '## 1. Общая информация\n\n';
+    md += `| Параметр | Значение |\n`;
+    md += `|----------|----------|\n`;
+    md += `| **Метод** | \`${data.method}\` |\n`;
+    md += `| **URL** | \`${escapeHtml(data.url)}\` |\n`;
+    md += `| **Тег** | \`${escapeHtml(data.tag)}\` |\n`;
+    md += `| **Operation** | \`${escapeHtml(data.operationId)}\` |\n`;
+    md += `| **Описание** | ${escapeHtml(data.summary)} |\n\n`;
+    md += '---\n\n';
+
+    // 2. Request
+    if (data.requestFields && data.requestFields.length > 0) {
+        md += '## 2. Request\n\n';
+        md += `### Request Body\n\n**Схема:** \`${escapeHtml(data.requestSchemaName || 'request')}\`\n\n`;
+        md += fieldsToMarkdownTable(data.requestFields);
+        
+        if (data.exampleRequest) {
+            try {
+                const parsed = JSON.parse(data.exampleRequest);
+                md += '\n### Пример запроса\n\n```json\n' + JSON.stringify(parsed, null, 2) + '\n```\n\n';
+            } catch(e) {
+                md += '\n### Пример запроса\n\n```\n' + escapeHtml(data.exampleRequest) + '\n```\n\n';
+            }
+        }
+        md += '---\n\n';
+    }
+
+    // 3. Response
+    if (data.responseFields && data.responseFields.length > 0) {
+        md += '## 3. Response\n\n';
+        md += '### 3.1 Response Body\n\n**Схема:** \`' + escapeHtml(data.responseSchemaName || 'response') + '\`\n\n';
+        md += fieldsToMarkdownTable(data.responseFields);
+        
+        if (data.exampleResponse) {
+            try {
+                const parsed = JSON.parse(data.exampleResponse);
+                md += '\n### Пример ответа\n\n```json\n' + JSON.stringify(parsed, null, 2) + '\n```\n\n';
+            } catch(e) {
+                md += '\n### Пример ответа\n\n```\n' + escapeHtml(data.exampleResponse) + '\n```\n\n';
+            }
+        }
+        md += '---\n\n';
+    }
+
+    // 4. Dependencies
+    if (data.dependencies && data.dependencies.length > 0) {
+        md += '## 4. Внешние зависимости\n\n';
+        data.dependencies.forEach(dep => {
+            md += `### ${escapeHtml(dep.name || 'Зависимость')}\n\n`;
+            md += `- **Тип:** ${escapeHtml(dep.type || 'external')}\n`;
+            md += `- **Описание:** ${escapeHtml(dep.description || '—')}\n\n`;
+        });
+        md += '---\n\n';
+    }
+
+    // 5. Algorithm
+    if (data.algorithm) {
+        md += '## 5. Логика сборки\n\n```\n' + escapeHtml(data.algorithm) + '\n```\n\n---\n\n';
+    }
+
+    // 6. Mermaid
+    if (data.mermaidDiagram) {
+        md += '## 6. Блок-схема алгоритма\n\n```mermaid\n' + escapeHtml(data.mermaidDiagram) + '\n```\n\n---\n\n';
+    }
+
+    // 7. Notes
+    if (data.notes) {
+        md += '## 7. Примечания\n\n' + escapeHtml(data.notes) + '\n\n';
+    }
+
+    return md;
+}
+
+function fieldsToMarkdownTable(fields) {
+    if (!fields || fields.length === 0) return '(Поля не найдены)\n\n';
+    
+    const flat = flattenFields(fields);
+    let table = '| Поле | Тип | Обяз. | Формат | Описание | Пример |\n';
+    table += '|------|-----|-------|--------|---------|--------|\n';
+    
+    flat.forEach(f => {
+        const indent = Array(f.depth * 2).fill('&nbsp;').join('');
+        const field = indent + escapeHtml(f.name);
+        const type = escapeHtml(f.type || '—');
+        const required = f.required ? '✓' : '✗';
+        const format = escapeHtml(f.format || '—');
+        const desc = escapeHtml(f.description || '—');
+        const example = escapeHtml(f.example || '—');
+        table += `| ${field} | ${type} | ${required} | ${format} | ${desc} | ${example} |\n`;
+    });
+    
+    return table + '\n';
+}
+
+function saveMarkdownFile(data) {
+    const markdown = generateMarkdown(data);
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (data.operationId || 'api-doc') + '.md';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function getUnfilledCount(data) {
+    let count = 0;
+    
+    if (!data.notes || data.notes.trim() === '') {
+        count++;
+    }
+    
+    if (!data.algorithm || data.algorithm.trim() === '') {
+        count++;
+    }
+    
+    if (!data.mermaidDiagram || data.mermaidDiagram.trim() === '') {
+        count++;
+    }
+
+    if (!data.dependencies || data.dependencies.length === 0) {
+        count++;
+    }
+    
+    return count;
+}
+
+function updateUnfilledCount(data) {
+    const countEl = document.getElementById('unfilled-count');
+    if (countEl) {
+        countEl.textContent = getUnfilledCount(data);
+    }
+}
+
+function renderDependencies(dependencies = []) {
+    let html = `<div style="color:var(--text-tertiary);margin-bottom:12px;font-size:12px;">🔴 Добавьте внешние API вызовы.</div><div id="deps-container">`;
+    
+    if (dependencies && dependencies.length > 0) {
+        dependencies.forEach((dep, i) => {
+            html += `<div class="dep-card" id="dep-${i}">
+                <div class="dep-card-header">
+                    <span class="dep-card-title">${escapeHtml(dep.name || '')}</span>
+                    <button class="dep-remove-btn" onclick="removeDependency(${i})">✕</button>
+                </div>
+                <div class="kv-grid" style="margin-bottom:12px;">
+                    <div class="kv-label">Тип</div>
+                    <div class="kv-value cell-required">
+                        <input type="text" class="cell-input" value="${escapeHtml(dep.type || 'external')}" onchange="updateDependency(${i}, 'type', this.value)">
+                    </div>
+                    <div class="kv-label">Имя</div>
+                    <div class="kv-value cell-required">
+                        <input type="text" class="cell-input" value="${escapeHtml(dep.name || '')}" onchange="updateDependency(${i}, 'name', this.value)">
+                    </div>
+                    <div class="kv-label">Описание</div>
+                    <div class="kv-value cell-required">
+                        <textarea class="cell-input" onchange="updateDependency(${i}, 'description', this.value)">${escapeHtml(dep.description || '')}</textarea>
+                    </div>
+                </div>
+            </div>`;
+        });
+    }
+
+    html += `</div><button class="add-row-btn" onclick="addDependency()">+ Добавить зависимость</button>`;
+    return html;
+}
+
+function addDependency() {
+    if (!currentData) return;
+    if (!currentData.dependencies) {
+        currentData.dependencies = [];
+    }
+    currentData.dependencies.push({
+        type: 'external',
+        name: 'Новая зависимость',
+        description: ''
+    });
+    const container = document.getElementById('deps-container');
+    if (container) {
+        container.parentElement.innerHTML = renderDependencies(currentData.dependencies);
+    }
+    updateUnfilledCount(currentData);
+}
+
+function removeDependency(index) {
+    if (!currentData || !currentData.dependencies) return;
+    currentData.dependencies.splice(index, 1);
+    const container = document.getElementById('deps-container');
+    if (container) {
+        container.parentElement.innerHTML = renderDependencies(currentData.dependencies);
+    }
+    updateUnfilledCount(currentData);
+}
+
+function updateDependency(index, field, value) {
+    if (!currentData || !currentData.dependencies || !currentData.dependencies[index]) return;
+    currentData.dependencies[index][field] = value;
+    updateUnfilledCount(currentData);
+}
+
+function generateExample(fields) {
+    if (!fields || fields.length === 0) return null;
+    
+    const result = {};
+    
+    fields.forEach(field => {
+        if (field.depth === 0) {
+            result[field.name] = generateFieldExample(field);
+        }
+    });
+    
+    return result;
+}
+
+function generateFieldExample(field) {
+    if (field.example) {
+        return field.example;
+    }
+    
+    const fieldType = (field.type || '').toLowerCase();
+    
+    switch (fieldType) {
+        case 'string':
+            if (field.format === 'email') return 'user@example.com';
+            if (field.format === 'date') return '2023-12-25';
+            if (field.format === 'date-time') return '2023-12-25T10:30:00Z';
+            return 'example_value';
+            
+        case 'integer':
+        case 'number':
+            return field.format === 'int32' ? 42 : 3.14;
+            
+        case 'boolean':
+            return true;
+            
+        case 'array':
+            return [generateFieldExample({type: 'string'})];
+            
+        case 'object':
+            if (field.children && field.children.length > 0) {
+                const obj = {};
+                field.children.forEach(child => {
+                    obj[child.name] = generateFieldExample(child);
+                });
+                return obj;
+            }
+            return {};
+            
+        default:
+            return 'example';
+    }
+}
+
+function displayParsedData(data) {
+    const container = document.getElementById('editor-content');
+    const mc = `method-${data.method.toLowerCase()}`;
+    
+    let html = `
+        <!-- 1. Общая информация -->
+        <div class="template-section">
+            <div class="section-header">
+                <div class="section-title">1. Общая информация <span class="section-badge badge-auto">✓ Авто</span></div>
+                <span class="section-chevron">▼</span>
+            </div>
+            <div class="section-body">
+                <div class="kv-grid">
+                    <div class="kv-label">Метод</div>
+                    <div class="kv-value cell-auto">
+                        <span class="cell-static"><span class="method-badge ${mc}">${escapeHtml(data.method)}</span></span>
+                    </div>
+                    <div class="kv-label">URL</div>
+                    <div class="kv-value cell-auto">
+                        <input type="text" class="cell-input" value="${escapeHtml(data.url || '')}" data-bind="url">
+                    </div>
+                    <div class="kv-label">Тег</div>
+                    <div class="kv-value cell-auto">
+                        <input type="text" class="cell-input" value="${escapeHtml(data.tag || '')}" data-bind="tag">
+                    </div>
+                    <div class="kv-label">Operation</div>
+                    <div class="kv-value cell-auto">
+                        <input type="text" class="cell-input" value="${escapeHtml(data.operationId || '')}" data-bind="operationId">
+                    </div>
+                    <div class="kv-label">Описание</div>
+                    <div class="kv-value ${data.summary ? 'cell-auto' : 'cell-manual'}">
+                        <textarea class="cell-input" data-bind="summary" placeholder="Описание...">${escapeHtml(data.summary || '')}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 2. Request Body
+    if (data.requestFields && data.requestFields.length > 0) {
+        html += `
+        <div class="template-section">
+            <div class="section-header">
+                <div class="section-title">2. Request Body <span class="section-badge badge-auto">✓ Авто</span></div>
+                <span class="section-chevron">▼</span>
+            </div>
+            <div class="section-body">
+                <p style="margin-bottom:12px;color:var(--text-secondary);">Схема: <code style="color:var(--accent-blue);">${escapeHtml(data.requestSchemaName || 'request')}</code></p>
+                ${renderFieldsTable(data.requestFields, true)}
+            </div>
+        </div>
+
+        <!-- 2.1 Пример запроса -->
+        <div class="template-section">
+            <div class="section-header">
+                <div class="section-title">2.1 Пример запроса <span class="section-badge badge-manual">✎ Проверить</span></div>
+                <span class="section-chevron">▼</span>
+            </div>
+            <div class="section-body">
+                <div style="color:var(--text-secondary);margin-bottom:12px;font-size:12px;">✏️ Пример сгенерирован из DTO. Замените значения на реалистичные.</div>
+                <textarea class="block-editor" data-bind="exampleRequest" placeholder='{"field":"value"}'>${escapeHtml(JSON.stringify(generateExample(data.requestFields), null, 2))}</textarea>
+            </div>
+        </div>
+        `;
+    }
+
+    // 3. Response
+    html += `
+        <div class="template-section">
+            <div class="section-header">
+                <div class="section-title">3. Response <span class="section-badge badge-auto">✓ Авто</span></div>
+                <span class="section-chevron">▼</span>
+            </div>
+            <div class="section-body">
+                <h4 style="color:var(--accent-green);margin-bottom:8px;">Ответы</h4>
+                <div style="text-align:center;padding:12px;color:var(--text-secondary);"><span class="response-code response-2xx">200</span> OK</div>
+            </div>
+        </div>
+    `;
+
+    // 3.1 Response Body
+    if (data.responseFields && data.responseFields.length > 0) {
+        html += `
+        <div class="template-section">
+            <div class="section-header">
+                <div class="section-title">3.1 Response Body <span class="section-badge badge-auto">✓ Авто</span></div>
+                <span class="section-chevron">▼</span>
+            </div>
+            <div class="section-body">
+                <p style="margin-bottom:12px;color:var(--text-secondary);">Схема: <code style="color:var(--accent-blue);">${escapeHtml(data.responseSchemaName || 'response')}</code></p>
+                ${renderFieldsTable(data.responseFields)}
+            </div>
+        </div>
+
+        <!-- 3.2 Пример ответа -->
+        <div class="template-section">
+            <div class="section-header">
+                <div class="section-title">3.2 Пример ответа <span class="section-badge badge-manual">✎ Проверить</span></div>
+                <span class="section-chevron">▼</span>
+            </div>
+            <div class="section-body">
+                <div style="color:var(--text-secondary);margin-bottom:12px;font-size:12px;">✏️ Пример сгенерирован из DTO. Замените значения на реалистичные.</div>
+                <textarea class="block-editor" data-bind="exampleResponse" placeholder='{"field":"value"}'>${escapeHtml(JSON.stringify(generateExample(data.responseFields), null, 2))}</textarea>
+            </div>
+        </div>
+        `;
+    }
+
+    // 4. Dependencies
+    html += `
+        <div class="template-section">
+            <div class="section-header">
+                <div class="section-title">4. Внешние зависимости <span class="section-badge badge-required">⚠ Заполнить</span></div>
+                <span class="section-chevron">▼</span>
+            </div>
+            <div class="section-body">
+                ${renderDependencies(data.dependencies || [])}
+            </div>
+        </div>
+    `;
+
+    // 5. Logic
+    html += `
+        <div class="template-section">
+            <div class="section-header">
+                <div class="section-title">5. Логика сборки <span class="section-badge badge-required">⚠ Заполнить</span></div>
+                <span class="section-chevron">▼</span>
+            </div>
+            <div class="section-body">
+                <div style="color:var(--text-secondary);margin-bottom:12px;font-size:12px;">🔴 Опишите алгоритм.</div>
+                <textarea class="block-editor" data-bind="algorithm" placeholder="ВХОД: DTO&#10;ШАГ 1: ...&#10;ВЫХОД: 200 OK" style="min-height:200px;">${escapeHtml(data.algorithm || '')}</textarea>
+            </div>
+        </div>
+    `;
+
+    // 6. Mermaid
+    html += `
+        <div class="template-section">
+            <div class="section-header">
+                <div class="section-title">6. Блок-схема алгоритма <span class="section-badge badge-required">⚠ Заполнить</span></div>
+                <span class="section-chevron">▼</span>
+            </div>
+            <div class="section-body">
+                <div style="color:var(--text-secondary);margin-bottom:12px;font-size:12px;">🔴 Создайте блок-схему алгоритма. Используйте синтаксис Mermaid.</div>
+                <div class="mermaid-editor-container">
+                    <div class="mermaid-editor-panel">
+                        <div class="mermaid-panel-header">
+                            <span class="icon">✏️</span>
+                            <span>Редактор</span>
+                        </div>
+                        <textarea id="mermaid-code-editor" class="mermaid-code-editor" data-bind="mermaidDiagram" placeholder="graph TD&#10;    Start[Начало] --> Input[...]&#10;    Input --> End[Конец]" style="min-height:300px;">${escapeHtml(data.mermaidDiagram || '')}</textarea>
+                    </div>
+                    <div class="mermaid-editor-panel">
+                        <div class="mermaid-panel-header">
+                            <span class="icon">👁️</span>
+                            <span>Предпросмотр</span>
+                        </div>
+                        <div id="mermaid-preview" class="mermaid-preview-container">
+                            <div class="mermaid-preview-empty">Введите код диаграммы слева...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 7. Notes
+    html += `
+        <div class="template-section">
+            <div class="section-header">
+                <div class="section-title">7. Примечания <span class="section-badge badge-required">⚠ Заполнить</span></div>
+                <span class="section-chevron">▼</span>
+            </div>
+            <div class="section-body">
+                <div style="color:var(--text-secondary);margin-bottom:12px;font-size:12px;">🔴 Примечания.</div>
+                <textarea class="block-editor" data-bind="notes" placeholder="- Edge cases..." style="min-height:150px;">${escapeHtml(data.notes || '')}</textarea>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+    
+    // Attach handlers
+    attachCollapsibleHandlers();
+    attachMermaidHandlers();
+    attachInputHandlers();
+}
+
+function attachInputHandlers() {
+    // Listen to changes in textarea/input and update currentData
+    document.querySelectorAll('[data-bind]').forEach(input => {
+        input.addEventListener('change', () => {
+            const path = input.dataset.bind;
+            updateDataByPath(currentData, path, input.value);
+        });
+    });
+}
+
+function updateDataByPath(obj, path, value) {
+    const keys = path.split('.');
+    let current = obj;
+    
+    for (let i = 0; i < keys.length - 1; i++) {
+        const key = keys[i];
+        if (!current[key]) {
+            current[key] = {};
+        }
+        current = current[key];
+    }
+    
+    current[keys[keys.length - 1]] = value;
+    updateUnfilledCount(currentData);
+}
+
+function showPreviewModal(data) {
+    if (!data) return;
+    
+    const markdown = generateMarkdown(data);
+    const preview = document.getElementById('preview-content');
+    preview.textContent = markdown;
+    
+    document.getElementById('preview-modal').classList.remove('hidden');
+}
+
+function toggleTheme() {
+    const root = document.documentElement;
+    const currentTheme = root.getAttribute('data-theme') || 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light-pink' : 'dark';
+    
+    if (newTheme === 'light-pink') {
+        root.setAttribute('data-theme', 'light-pink');
+    } else {
+        root.removeAttribute('data-theme');
+    }
+    
+    localStorage.setItem('app-theme', newTheme);
+    
+    const btn = document.getElementById('theme-toggle');
+    if (btn) {
+        btn.textContent = newTheme === 'dark' ? '🌸' : '🌙';
+    }
+}
+
+function attachCollapsibleHandlers() {
+    document.querySelectorAll('.section-header').forEach(header => {
+        // Remove old listener if exists
+        header.removeEventListener('click', toggleSection);
+        header.addEventListener('click', toggleSection);
+    });
+}
+
+function toggleSection(e) {
+    const header = e.currentTarget;
+    const body = header.nextElementSibling;
+    
+    header.classList.toggle('collapsed');
+    body.classList.toggle('collapsed-body');
+}
+
+</script>
+</body>
+</html>
