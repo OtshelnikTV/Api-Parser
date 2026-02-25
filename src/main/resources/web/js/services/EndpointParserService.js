@@ -11,66 +11,43 @@ export class EndpointParserService {
     }
 
     /**
-     * Парсить endpoint через API сервера
+     * Парсить endpoint и заполнить parsedData
      */
     async parseEndpoint(projectState, parsedData) {
-        try {
-            const response = await fetch('/api/parse-endpoint', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    projectRoot: projectState.projectRoot,
-                    endpointPath: projectState.selectedRequest,
-                    method: projectState.selectedMethod
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to parse endpoint');
-            }
-
-            const result = await response.json();
-            
-            // Заполнить parsedData из ответа сервера
-            parsedData.reset();
-            parsedData.method = result.method || '';
-            parsedData.url = result.url || '';
-            parsedData.operationId = result.operationId || '';
-            parsedData.tag = result.tag || '';
-            parsedData.summary = result.summary || '';
-            // Добавить заполнение имени схемы DTO
-            parsedData.requestSchemaName = result.requestSchemaName || '';
-            
-            // Request fields
-            if (result.requestFields) {
-                parsedData.requestFields = result.requestFields.map(field => new Field(
-                    field.name,
-                    field.type,
-                    field.required,
-                    field.description,
-                    field.example
-                ));
-            }
-            
-            // Response fields
-            if (result.responseFields) {
-                parsedData.responseSchemas = result.responseFields.map(field => new Field(
-                    field.name,
-                    field.type,
-                    field.required,
-                    field.description,
-                    field.example
-                ));
-            }
-            
-            return parsedData;
-        } catch (error) {
-            console.error('Error parsing endpoint:', error);
-            throw error;
+        const folder = projectState.getSelectedRequestFolder();
+        if (!folder) {
+            throw new Error('Папка не найдена');
         }
-    }
+
+        const methodToUse = projectState.selectedMethod || folder.methods[0];
+        if (!methodToUse) {
+            throw new Error('Не найден метод');
+        }
+
+        parsedData.reset();
+        parsedData.method = methodToUse.toUpperCase();
+
+        // URL
+        if (folder.apiPath) {
+            parsedData.url = folder.apiPath;
+        } else {
+            parsedData.url = '/' + projectState.selectedRequest.replace(/_/g, '/');
+        }
+
+        let methodContent;
+        let methodFilePath;
+
+        if (folder.flat) {
+            // Плоский файл
+            methodFilePath = projectState.projectRoot + '/paths/' + projectState.selectedRequest + '.yaml';
+            const fullContent = folder.flatContent || await this.fileService.readFile(folder.flatFile);
+            methodContent = this.fileService.extractTopLevelMethod(fullContent, methodToUse);
+            if (!methodContent) {
+                throw new Error('Метод ' + methodToUse + ' не найден в файле');
+            }
+        } else {
+            // Вложенная структура
+            methodFilePath = projectState.projectRoot + '/paths/' + projectState.selectedRequest + '/' + methodToUse + '.yaml';
             const methodFile = folder.files[methodToUse + '.yaml'] || folder.files[methodToUse + '.yml'];
             if (!methodFile) {
                 throw new Error('Не найден файл метода ' + methodToUse);

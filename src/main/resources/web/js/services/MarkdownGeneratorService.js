@@ -106,14 +106,40 @@ export class MarkdownGeneratorService {
             md += `## 4. Внешние зависимости\n\n`;
             for (let i = 0; i < d.dependencies.length; i++) {
                 const dep = d.dependencies[i];
+                const depType = dep.type || 'external';
+                
+                // Название типа для отображения
+                const typeLabels = {
+                    'gateway': 'Шлюз',
+                    'external': 'Внешний запрос',
+                    'ffl_table': 'Таблица ФФЛ',
+                    'kafka': 'Кафка',
+                    'calculated': 'Вычисляемое значение'
+                };
+                const typeLabel = typeLabels[depType] || 'Внешний запрос';
+                
                 md += `### 4.${i + 1} \`${dep.name}\` — ${dep.description}\n\n`;
-                md += this.buildAlignedTable(['Параметр', 'Значение'], [
-                    ['**Метод**', '`' + dep.method + '`'],
-                    ['**URL**', '`' + dep.url + '`'],
-                    ['**Когда**', dep.when]
-                ]);
+                
+                // Строим таблицу в зависимости от типа
+                const tableRows = [['**Тип**', typeLabel]];
+                
+                if (depType === 'external') {
+                    tableRows.push(
+                        ['**Метод**', '\`' + (dep.method || 'GET') + '\`'],
+                        ['**URL**', '\`' + (dep.url || '') + '\`'],
+                        ['**Когда**', dep.when || '—']
+                    );
+                } else if (depType === 'gateway' || depType === 'kafka') {
+                    tableRows.push(['**Когда**', dep.when || '—']);
+                } else if (depType === 'calculated') {
+                    tableRows.push(['**Логика**', dep.logic || '—']);
+                }
+                // Для ffl_table только тип, имя и описание
+                
+                md += this.buildAlignedTable(['Параметр', 'Значение'], tableRows);
                 md += '\n';
 
+                // Входные параметры (для всех типов)
                 if (dep.inputParams) {
                     const params = Array.isArray(dep.inputParams)
                         ? dep.inputParams
@@ -131,6 +157,7 @@ export class MarkdownGeneratorService {
                     }
                 }
 
+                // Параметры ответа (для всех типов)
                 if (dep.outputFields) {
                     const fields = Array.isArray(dep.outputFields)
                         ? dep.outputFields

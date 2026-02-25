@@ -10,13 +10,16 @@ export class ProjectSelectorUI {
         this.fileService = fileService;
         this.projectState = projectState;
         this.onNext = onNext;
-        this.projects = []; // Сохраняем список проектов
         
         this.setupEventListeners();
-        this.loadProjects();
     }
 
     setupEventListeners() {
+        // Обработчик выбора папки
+        document.getElementById('project-folder-input').addEventListener('change', (e) => {
+            this.onFolderSelected(e.target.files);
+        });
+
         // Обработчик кнопки "Далее"
         document.getElementById('btn-save-project').addEventListener('click', () => {
             this.saveAndProceed();
@@ -31,77 +34,17 @@ export class ProjectSelectorUI {
         });
     }
 
-    async loadProjects() {
-        LoadingOverlay.show('Загрузка проектов...');
+    async onFolderSelected(files) {
+        if (!files || files.length === 0) return;
 
-        try {
-            this.projects = await this.fileService.discoverProjects();
-            this.displayProjects(this.projects);
-            LoadingOverlay.hide();
-        } catch (error) {
-            console.error('Error loading projects:', error);
-            NotificationService.show('Ошибка загрузки проектов: ' + error.message, 'error');
-            LoadingOverlay.hide();
-        }
-    }
+        LoadingOverlay.show('Сканирование проектов...');
+        LoadingOverlay.updateProgress(`Анализ ${files.length} файлов...`);
 
-    displayProjects(projects) {
-        const container = document.getElementById('project-list-container');
-        const list = document.getElementById('project-list');
-        
-        if (projects.length === 0) {
-            container.style.display = 'none';
-            NotificationService.show('Проекты не найдены', 'warning');
-            return;
-        }
-
-        container.style.display = 'block';
-        list.innerHTML = '';
-
-        projects.forEach(project => {
-            const item = document.createElement('div');
-            item.className = 'project-item';
-            item.dataset.projectName = project.name;
-            item.innerHTML = `
-                <div class="project-name">${project.name}</div>
-                <div class="project-path">${project.rootPath}</div>
-                <div class="project-files">${project.fileCount} файлов</div>
-            `;
-            list.appendChild(item);
-        });
-    }
-
-    onProjectSelected(projectName) {
-        // Снять выделение с предыдущего
-        document.querySelectorAll('.project-item').forEach(item => {
-            item.classList.remove('selected');
-        });
-
-        // Выделить выбранный
-        const selectedItem = document.querySelector(`[data-project-name="${projectName}"]`);
-        if (selectedItem) {
-            selectedItem.classList.add('selected');
-        }
-
-        this.projectState.selectedProject = projectName;
-        document.getElementById('btn-save-project').disabled = false;
-    }
-
-    saveAndProceed() {
-        if (!this.projectState.selectedProject) return;
-        
-        this.projectState.projectRoot = this.projectState.selectedProject;
-        this.onNext();
-    }
-
-    show() {
-        DOMHelpers.showModal('setup-project');
-    }
-
-    hide() {
-        DOMHelpers.hideModal('setup-project');
-    }
-}
+        // Небольшая задержка для показа индикатора
+        setTimeout(async () => {
+            try {
+                // Обнаружить все проекты
+                const projects = this.fileService.discoverProjects(files);
 
                 if (projects.length === 0) {
                     throw new Error('Не найдено ни одного проекта с openapi.yaml');
@@ -160,13 +103,6 @@ export class ProjectSelectorUI {
             selectedEl.classList.add('selected');
         }
 
-        // Найти объект проекта
-        const selectedProject = this.projects.find(p => p.name === projectName);
-        if (!selectedProject) {
-            NotificationService.error('Проект не найден');
-            return;
-        }
-
         this.projectState.selectedProjectName = projectName;
 
         LoadingOverlay.show('Индексация проекта...');
@@ -174,7 +110,7 @@ export class ProjectSelectorUI {
 
         setTimeout(async () => {
             try {
-                const result = await this.fileService.indexProject(selectedProject, this.projectState);
+                const result = await this.fileService.indexProject(projectName, this.projectState);
 
                 document.getElementById('project-file-count').textContent =
                     `${result.endpointsCount} endpoints, ${result.schemasCount} schemas`;

@@ -195,21 +195,13 @@ export class EditorUI {
                 depthMarker = '<span class="indent-marker">' + markers.join('') + ' </span>';
             }
 
-            // Имя поля + бейдж DTO
-            const refBadge = f.refName ? `<span class="nested-dto-badge" style="margin-left:6px;background:#e6f1ff;color:#58a6ff;border-radius:3px;padding:2px 6px;font-size:11px;font-weight:600;">${DOMHelpers.escape(f.refName)}</span>` : '';
+            // Бейджи
+            const refBadge = f.refName ? `<span class="nested-dto-badge">${DOMHelpers.escape(f.refName)}</span>` : '';
             const arrayBadge = f.isArray ? '<span class="array-badge">[]</span>' : '';
-            const nameDisplay = `<div class="field-name-wrapper" style="margin-left:${indentPx}px">${depthMarker}<code>${DOMHelpers.escape(f.name)}</code>${arrayBadge}${refBadge}</div>`;
-            const rowClass = f.depth > 0 ? ' nested-field' : '';
 
-            // Тип поля: если есть отдельная DTO, показываем её
-            let typeDisplay = typeof f.getDisplayType === 'function' ? f.getDisplayType() : f.type;
-            if ((!typeDisplay || typeDisplay === '—') && f.refName) {
-                typeDisplay = f.refName;
-            }
-            let typeBadge = '';
-            if (f.refName) {
-                typeBadge = `<span class="nested-dto-badge" style="margin-left:6px;background:#bc8cff33;color:#bc8cff;border-radius:4px;padding:2px 7px;font-size:10px;font-weight:600;">${DOMHelpers.escape(f.refName)}</span>`;
-            }
+            const nameDisplay = `<div class="field-name-wrapper" style="margin-left:${indentPx}px">${depthMarker}<code>${DOMHelpers.escape(f.name)}</code>${arrayBadge}${refBadge}</div>`;
+
+            const rowClass = f.depth > 0 ? ' nested-field' : '';
 
             // Если showSource = true, добавляем столбец "Источник"
             const sourceCell = showSource ? `<td class="cell-required">
@@ -218,7 +210,7 @@ export class EditorUI {
 
             rows += `<tr class="${rowClass}">
                 <td class="cell-auto"><span class="cell-static">${nameDisplay}</span></td>
-                <td class="cell-auto"><span class="cell-static"><code>${DOMHelpers.escape(typeDisplay)}</code>${typeBadge}</span></td>
+                <td class="cell-auto"><span class="cell-static"><code>${DOMHelpers.escape(f.type)}</code></span></td>
                 <td class="cell-auto"><span class="cell-static">${f.required ? '✅' : '❌'}</span></td>
                 <td class="cell-auto"><span class="cell-static">${DOMHelpers.escape(f.format || '—')}</span></td>
                 <td class="${f.description ? 'cell-auto' : 'cell-manual'}">
@@ -238,11 +230,19 @@ export class EditorUI {
             <tbody>${rows}</tbody></table></div>`;
     }
 
+    renderResponseBody(rs, idx) {
+        return `<p style="margin-bottom:12px;color:#8b949e;">
+            Код: <span class="response-code response-2xx">${rs.code}</span>
+            Схема: <code style="color:#58a6ff;">${DOMHelpers.escape(rs.schemaName)}</code>
+        </p>
+        ${this.renderFieldsTable(rs.fields)}`;
+    }
+
     renderExampleBlock(type) {
         const isReq = type === 'request';
         const value = isReq ? this.parsedData.exampleRequest : this.parsedData.exampleResponse;
         const binding = isReq ? 'parsedData.exampleRequest' : 'parsedData.exampleResponse';
-
+        
         return `<div class="info-note"><span class="info-note-icon">✏️</span><span>Пример сгенерирован из DTO. Замените значения на реалистичные.</span></div>
             <textarea class="block-editor highlight-manual" data-bind="${binding}" placeholder='{"field":"value"}'>${DOMHelpers.escape(value)}</textarea>`;
     }
@@ -297,6 +297,11 @@ export class EditorUI {
     }
 
     renderDepCard(i, dep) {
+        // Устанавливаем тип по умолчанию, если не задан
+        if (!dep.type) {
+            dep.type = 'external';
+        }
+
         // --- Нормализуем inputParams ---
         let inputParams;
         if (Array.isArray(dep.inputParams)) {
@@ -368,23 +373,37 @@ export class EditorUI {
             </tr>`;
         }).join('');
 
-        // --- Остальной HTML без изменений ---
-        return `<div class="dep-card" id="dep-${i}">
-            <div class="dep-card-header">
-                <span class="dep-card-title">${DOMHelpers.escape(dep.name) || `Зависимость #${i + 1}`}</span>
-                <button class="dep-remove-btn" data-action="removeDep" data-index="${i}">✕</button>
+        // --- Генерируем HTML в зависимости от типа ---
+        const depType = dep.type || 'external';
+        
+        let fieldsHTML = '';
+        
+        // Общие поля: тип и имя
+        fieldsHTML += `
+            <div class="kv-label">Тип</div>
+            <div class="kv-value cell-required">
+                <select class="cell-input" data-bind="parsedData.dependencies[${i}].type">
+                    <option value="gateway" ${depType === 'gateway' ? 'selected' : ''}>Шлюз</option>
+                    <option value="external" ${depType === 'external' ? 'selected' : ''}>Внешний запрос</option>
+                    <option value="ffl_table" ${depType === 'ffl_table' ? 'selected' : ''}>Таблица ФФЛ</option>
+                    <option value="kafka" ${depType === 'kafka' ? 'selected' : ''}>Кафка</option>
+                    <option value="calculated" ${depType === 'calculated' ? 'selected' : ''}>Вычисляемое значение</option>
+                </select>
             </div>
-            <div class="kv-grid" style="margin-bottom:12px;">
-                <div class="kv-label">Имя</div>
-                <div class="kv-value cell-required">
-                    <input type="text" class="cell-input" value="${DOMHelpers.escape(dep.name || '')}"
-                        data-bind="parsedData.dependencies[${i}].name" placeholder="RecNum">
-                </div>
-                <div class="kv-label">Описание</div>
-                <div class="kv-value cell-required">
-                    <input type="text" class="cell-input" value="${DOMHelpers.escape(dep.description || '')}"
-                        data-bind="parsedData.dependencies[${i}].description" placeholder="Получение...">
-                </div>
+            <div class="kv-label">Имя</div>
+            <div class="kv-value cell-required">
+                <input type="text" class="cell-input" value="${DOMHelpers.escape(dep.name || '')}"
+                    data-bind="parsedData.dependencies[${i}].name" placeholder="RecNum">
+            </div>
+            <div class="kv-label">Описание</div>
+            <div class="kv-value cell-required">
+                <textarea class="cell-input" data-bind="parsedData.dependencies[${i}].description" placeholder="Получение...">${DOMHelpers.escape(dep.description || '')}</textarea>
+            </div>`;
+
+        // Условные поля в зависимости от типа
+        if (depType === 'external') {
+            // Внешний запрос: Метод, URL, Когда
+            fieldsHTML += `
                 <div class="kv-label">Метод</div>
                 <div class="kv-value cell-required">
                     <input type="text" class="cell-input" value="${DOMHelpers.escape(dep.method || 'GET')}"
@@ -398,7 +417,32 @@ export class EditorUI {
                 <div class="kv-label">Когда</div>
                 <div class="kv-value cell-required">
                     <textarea class="cell-input" data-bind="parsedData.dependencies[${i}].when" placeholder="Условие...">${DOMHelpers.escape(dep.when || '')}</textarea>
-                </div>
+                </div>`;
+        } else if (depType === 'gateway' || depType === 'kafka') {
+            // Шлюз / Кафка: Когда
+            fieldsHTML += `
+                <div class="kv-label">Когда</div>
+                <div class="kv-value cell-required">
+                    <textarea class="cell-input" data-bind="parsedData.dependencies[${i}].when" placeholder="Условие...">${DOMHelpers.escape(dep.when || '')}</textarea>
+                </div>`;
+        } else if (depType === 'calculated') {
+            // Вычисляемое значение: Логика
+            fieldsHTML += `
+                <div class="kv-label">Логика</div>
+                <div class="kv-value cell-required">
+                    <textarea class="cell-input" data-bind="parsedData.dependencies[${i}].logic" placeholder="Описание логики вычисления..." style="min-height:100px;">${DOMHelpers.escape(dep.logic || '')}</textarea>
+                </div>`;
+        }
+        // Для ffl_table только Имя и Описание (уже добавлены)
+
+        // --- Остальной HTML без изменений ---
+        return `<div class="dep-card" id="dep-${i}">
+            <div class="dep-card-header">
+                <span class="dep-card-title">${DOMHelpers.escape(dep.name) || `Зависимость #${i + 1}`}</span>
+                <button class="dep-remove-btn" data-action="removeDep" data-index="${i}">✕</button>
+            </div>
+            <div class="kv-grid" style="margin-bottom:12px;">
+                ${fieldsHTML}
             </div>
             <h5 style="color:#8b949e;margin:8px 0;">Входные параметры </h5>
             <div class="table-wrapper"><table class="edit-table">

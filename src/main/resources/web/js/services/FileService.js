@@ -1,67 +1,52 @@
 import { Field } from '../models/Field.js';
 
 /**
- * Сервис для работы с файлами через API сервера
+ * Сервис для работы с файлами и индексацией проекта
  */
 export class FileService {
     constructor() {
         this.httpMethods = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
+        this.allFiles = []; // Все файлы из выбранной папки
     }
 
     /**
-     * Обнаружить все проекты через API
+     * Обнаружить все проекты (подпапки с openapi.yaml)
      */
-    async discoverProjects() {
-        try {
-            const response = await fetch('/api/projects');
-            if (!response.ok) {
-                throw new Error('Failed to fetch projects');
+    discoverProjects(files) {
+        this.allFiles = Array.from(files);
+        const projects = [];
+        const projectMap = new Map();
+
+        // Найти все openapi.yaml файлы
+        for (const file of this.allFiles) {
+            const rel = file.webkitRelativePath;
+            const parts = rel.split('/');
+            
+            // Ищем openapi.yaml на втором уровне (например, test_requests/Main/openapi.yaml)
+            if (parts.length >= 3 && 
+                (parts[2] === 'openapi.yaml' || parts[2] === 'openapi.yml')) {
+                const projectName = parts[1];
+                
+                if (!projectMap.has(projectName)) {
+                    projectMap.set(projectName, {
+                        name: projectName,
+                        rootPath: parts[0] + '/' + projectName,
+                        openapiFile: file,
+                        fileCount: 0
+                    });
+                }
             }
-            const projects = await response.json();
-            return projects.map(p => ({
-                name: p.name,
-                rootPath: p.rootPath,
-                fileCount: p.fileCount || 0
-            }));
-        } catch (error) {
-            console.error('Error discovering projects:', error);
-            return [];
         }
-    }
 
-    /**
-     * Получить endpoints для проекта
-     */
-    async getProjectEndpoints(projectName, rootPath) {
-        try {
-            const response = await fetch(`/api/endpoints?project=${encodeURIComponent(projectName)}&rootPath=${encodeURIComponent(rootPath)}`);
-            if (!response.ok) {
-                throw new Error('Failed to fetch endpoints');
+        // Подсчитать файлы для каждого проекта
+        for (const file of this.allFiles) {
+            const rel = file.webkitRelativePath;
+            for (const [projectName, project] of projectMap.entries()) {
+                if (rel.startsWith(project.rootPath + '/')) {
+                    project.fileCount++;
+                }
             }
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching endpoints:', error);
-            return [];
         }
-    }
-
-    /**
-     * Прочитать файл (через API, если нужно)
-     */
-    async readFile(file) {
-        // Для IntelliJ виджета файлы читаются на сервере
-        // Этот метод может быть не нужен, если парсинг происходит на сервере
-        return '';
-    }
-
-    /**
-     * Извлечь метод из полного содержимого файла
-     */
-    extractTopLevelMethod(fullContent, method) {
-        // Логика извлечения метода из YAML
-        // Это может быть упрощено, так как парсинг происходит на сервере
-        return fullContent;
-    }
 
         return Array.from(projectMap.values());
     }
@@ -79,41 +64,106 @@ export class FileService {
     }
 
     /**
-     * Индексировать конкретный проект через API
+     * Индексировать конкретный проект
      */
-    async indexProject(project, projectState) {
+    async indexProject(projectName, projectState) {
         projectState.reset();
-
-        // Получить список эндпоинтов через API
-        const endpoints = await this.getProjectEndpoints(project.name, project.rootPath);
-
-        if (endpoints.length === 0) {
-            throw new Error('Эндпоинты не найдены для проекта ' + project.name);
+        
+        if (!this.allFiles || this.allFiles.length === 0) {
+            throw new Error('Файлы не найдены');
         }
 
-        projectState.projectRoot = project.rootPath;
+        // Определяем корневую папку проекта
+        const rootParts = this.allFiles[0].webkitRelativePath.split('/');
+        const baseFolder = rootParts[0]; // например, "test_requests"
+        projectState.projectRoot = baseFolder + '/' + projectName;
+        const schemasPrefix = projectState.projectRoot + '/components/schemas/';
 
-        // Обработать эндпоинты
-        const result = {
-            endpointsCount: 0,
-            schemasCount: 0
+        // Построить карту файлов только для данного проекта
+        const fileMap = {};
+        let openapiFile = null;
+
+        for (const file of this.allFiles) {
+            const rel = file.webkitRelativePath;
+            
+            // Пропускаем файлы, не относящиеся к выбранному проекту
+            if (!rel.startsWith(projectState.projectRoot + '/')) {
+                continue;
+            }
+            
+            fileMap[rel] = file;
+
+            if (rel === projectState.projectRoot + '/openapi.yaml' ||
+                rel === projectState.projectRoot + '/openapi.yml') {
+                openapiFile = file;
+            }
+
+            // Индексация схем
+            const isYaml = rel.endsWith('.yaml') || rel.endsWith('.yml');
+            if (isYaml && rel.startsWith(schemasPrefix)) {
+                projectState.relevantFiles[rel] = file;
+                const fileName = rel.substring(schemasPrefix.length);
+                projectState.schemaFiles[fileName] = file;
+                projectState.schemaFiles[fileName.split('/').pop()] = file;
+            }
+        }
+
+        if (!openapiFile) {
+            throw new Error('Не найден openapi.yaml в корне проекта');
+        }
+
+        // Парсинг openapi.yaml
+        const openapiContent = await this.readFile(openapiFile);
+        const pathEntries = this.parsePathsFromOpenapi(openapiContent);
+
+        // Чтение endpoint файлов
+        const promises = [];
+
+        for (const [apiPath, refPath] of Object.entries(pathEntries)) {
+            const fullPath = projectState.projectRoot + '/' + refPath;
+            const file = fileMap[fullPath];
+
+            if (!file) {
+                console.warn(`Файл не найден: ${fullPath} (для ${apiPath})`);
+                continue;
+            }
+
+            projectState.relevantFiles[fullPath] = file;
+            const endpointName = refPath.split('/').pop().replace(/\.(yaml|yml)$/, '');
+
+            promises.push(
+                this.readFile(file).then(content => {
+                    const foundMethods = [];
+                    for (const m of this.httpMethods) {
+                        if (new RegExp('^' + m + '\\s*:', 'm').test(content)) {
+                            foundMethods.push(m);
+                        }
+                    }
+
+                    projectState.pathsFolders[endpointName] = {
+                        files: {},
+                        methods: foundMethods,
+                        flat: true,
+                        flatFile: file,
+                        flatContent: content,
+                        apiPath: apiPath
+                    };
+
+                    // Виртуальные файлы
+                    projectState.pathsFolders[endpointName].files[endpointName + '.yaml'] = file;
+                    for (const m of foundMethods) {
+                        projectState.pathsFolders[endpointName].files[m + '.yaml'] = file;
+                    }
+                })
+            );
+        }
+
+        await Promise.all(promises);
+
+        return {
+            endpointsCount: Object.keys(pathEntries).length,
+            schemasCount: Object.keys(projectState.schemaFiles).length
         };
-
-        for (const endpoint of endpoints) {
-            const endpointInfo = {
-                apiPath: endpoint.apiPath,
-                filePath: endpoint.filePath,
-                methods: endpoint.methods || []
-            };
-
-            projectState.endpoints.push(endpointInfo);
-            result.endpointsCount++;
-        }
-
-        // Для совместимости с существующим кодом
-        result.schemasCount = 0; // Пока не получаем схемы через API
-
-        return result;
     }
 
     /**

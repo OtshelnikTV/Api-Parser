@@ -38,8 +38,7 @@ export class App {
         this.requestSelectorUI = new RequestSelectorUI(
             this.projectState,
             () => this.showProjectSelector(),
-            () => this.showMethodSelector(),
-            this.fileService
+            () => this.showMethodSelector()
         );
 
         this.methodSelectorUI = new MethodSelectorUI(
@@ -221,6 +220,11 @@ export class App {
                         }
                     }
                 }
+
+                // Обновить тип зависимости и перерендерить
+                if (path.includes('dependencies') && path.includes('.type')) {
+                    this.editorUI.render();
+                }
             }
         } catch (error) {
             console.error('Error in data binding:', error);
@@ -247,11 +251,13 @@ export class App {
 
             case 'addDep': {
                 this.parsedData.dependencies.push({
+                    type: 'external',     // по умолчанию "Внешний запрос"
                     name: '',
                     description: '',
                     method: 'GET',
                     url: '',
                     when: '',
+                    logic: '',            // для "Вычисляемое значение"
                     inputParams: [],      // ← сразу массив, не строка
                     outputFields: []       // ← сразу массив, не строка
                 });

@@ -1,17 +1,14 @@
 import { DOMHelpers } from '../utils/DOMHelpers.js';
-import { LoadingOverlay } from '../utils/LoadingOverlay.js';
 
 /**
  * UI компонент для выбора запроса (Шаг 2)
  */
 export class RequestSelectorUI {
-    constructor(projectState, onBack, onNext, fileService) {
+    constructor(projectState, onBack, onNext) {
         this.projectState = projectState;
         this.onBack = onBack;
         this.onNext = onNext;
-        this.fileService = fileService;
         
-        this.endpoints = [];
         this.setupEventListeners();
     }
 
@@ -39,7 +36,7 @@ export class RequestSelectorUI {
         }
     }
 
-    async show() {
+    show() {
         DOMHelpers.hideAllScreens();
         DOMHelpers.show('setup-request');
         
@@ -48,24 +45,12 @@ export class RequestSelectorUI {
         document.getElementById('btn-next-method').disabled = true;
         document.getElementById('request-search').value = '';
         
-        await this.loadEndpoints();
         this.renderRequestList();
-    }
-
-    async loadEndpoints() {
-        LoadingOverlay.show('Загрузка endpoints...');
-        try {
-            this.endpoints = await this.fileService.getProjectEndpoints(this.projectState.projectRoot);
-        } catch (error) {
-            console.error('Error loading endpoints:', error);
-            this.endpoints = [];
-        }
-        LoadingOverlay.hide();
     }
 
     renderRequestList(filter = '') {
         const container = document.getElementById('request-list');
-        const entries = this.endpoints
+        const entries = this.projectState.getEndpointsList()
             .filter(ep => ep.name.toLowerCase().includes(filter.toLowerCase()));
 
         if (!entries.length) {
