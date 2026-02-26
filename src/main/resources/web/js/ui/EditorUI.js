@@ -543,13 +543,26 @@ export class EditorUI {
                 // Очистка предыдущей диаграммы
                 preview.innerHTML = '';
 
+                // удалить предыдущие контейнеры mermaid (dmermaid-*)
+                document.querySelectorAll('div[id^="dmermaid-"]').forEach(el => el.remove());
+
                 // Создание уникального ID для диаграммы
                 const id = 'mermaid-' + Date.now();
 
                 // Рендеринг диаграммы
                 const { svg } = await mermaid.render(id, code);
+
+                // detect actual error graphic (look for element, not just style rule)
+                if (/<path[^>]+class="error-icon"/.test(svg)) {
+                    throw new Error('Syntax error in text');
+                }
+
                 preview.innerHTML = `<div class="mermaid-preview-content">${svg}</div>`;
+
+                // повторный вынос контейнеров (иногда mermaid добавляет их даже при успешном рендере)
+                document.querySelectorAll('div[id^="dmermaid-"]').forEach(el => el.remove());
             } catch (error) {
+                console.error('mermaid render error', error);
                 preview.innerHTML = `<div class="mermaid-preview-error">
                     <strong>Ошибка синтаксиса:</strong><br>
                     ${DOMHelpers.escape(error.message || 'Проверьте код диаграммы')}
