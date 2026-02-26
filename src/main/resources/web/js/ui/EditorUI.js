@@ -524,19 +524,28 @@ export class EditorUI {
         let debounceTimer;
         const updatePreview = async () => {
             const code = editor.value.trim();
-            
+
             if (!code) {
                 preview.innerHTML = '<div class="mermaid-preview-empty">Введите код диаграммы слева...</div>';
+                return;
+            }
+
+            // если библиотека ещё не загрузилась, подождём немного и повторим
+            if (typeof mermaid === 'undefined') {
+                preview.innerHTML = `<div class="mermaid-preview-error">
+                    <strong>Библиотека Mermaid пока не загружена, подождите...</strong>
+                </div>`;
+                setTimeout(updatePreview, 200);
                 return;
             }
 
             try {
                 // Очистка предыдущей диаграммы
                 preview.innerHTML = '';
-                
+
                 // Создание уникального ID для диаграммы
                 const id = 'mermaid-' + Date.now();
-                
+
                 // Рендеринг диаграммы
                 const { svg } = await mermaid.render(id, code);
                 preview.innerHTML = `<div class="mermaid-preview-content">${svg}</div>`;
