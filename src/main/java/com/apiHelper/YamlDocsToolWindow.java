@@ -8,6 +8,7 @@ import com.intellij.ui.jcef.JBCefBrowser;
 import javax.swing.*;
 import java.awt.*;
 
+
 public class YamlDocsToolWindow {
     private final JPanel mainPanel;
     private final Project project;
