@@ -12,18 +12,18 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.yaml:snakeyaml:2.2'
+    // No backend parsing dependencies required; all logic runs in JS widget
 }
 
 intellij {
-    version = '2023.2.5'
+    version = '2021.3.3'
     type = 'IC'  // IC = Community Edition, IU = Ultimate
     plugins = []
 }
 
 tasks {
     patchPluginXml {
-        sinceBuild = '232'
+        sinceBuild = '213'
         untilBuild = '253.*'
     }
 
@@ -40,7 +40,7 @@ tasks {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(11)
     }
 }
 

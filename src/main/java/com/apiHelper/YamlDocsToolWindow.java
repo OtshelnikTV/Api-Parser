@@ -32,7 +32,10 @@ public class YamlDocsToolWindow {
     
     private void initUI() {
         // Toolbar with buttons
+        Color bgColor = new Color(25, 26, 28);
+        mainPanel.setBackground(bgColor);
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        toolbar.setBackground(bgColor);
         
         startButton = new JButton("▶ Start Server");
         stopButton = new JButton("■ Stop");
@@ -56,6 +59,7 @@ public class YamlDocsToolWindow {
         
         // Embedded JCEF browser
         browser = new JBCefBrowser("about:blank");
+        browser.getComponent().setBackground(bgColor);
         mainPanel.add(browser.getComponent(), BorderLayout.CENTER);
     }
     
