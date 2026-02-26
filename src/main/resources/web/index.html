@@ -27,22 +27,14 @@
             <div class="step-dot"></div>
         </div>
         <span class="modal-icon">📁</span>
-        <h2>Шаг 1: Папка проекта</h2>
-        <p>Выберите корневую папку <code>api-doc</code>.<br>
-        <small style="color:#6e7681;">Индексируются только paths/ и components/schemas/</small></p>
+        <h2>Шаг 1: Выберите проект</h2>
+        <p>Список проектов берётся из <code>redocly.yaml</code> в корне проекта.</p>
         
-        <div class="folder-picker" id="project-folder-picker">
-            <input type="file" webkitdirectory directory multiple id="project-folder-input">
-            <div class="folder-picker-icon">📂</div>
-            <div class="folder-picker-text">Нажмите и выберите папку проекта</div>
-            <div class="folder-picker-path" id="project-folder-path"></div>
-            <div class="file-count" id="project-file-count"></div>
-        </div>
-
         <!-- Project List -->
-        <div id="project-list-container" style="display:none; margin-bottom:16px;">
+        <div id="project-list-container" style="margin-bottom:16px;">
             <h3 style="color:#8b949e; font-size:14px; margin-bottom:10px;">Выберите проект:</h3>
             <div class="project-list" id="project-list"></div>
+            <div class="file-count" id="project-file-count"></div>
         </div>
         
         <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">

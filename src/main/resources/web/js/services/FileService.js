@@ -2,167 +2,165 @@ import { Field } from '../models/Field.js';
 
 /**
  * Сервис для работы с файлами и индексацией проекта
+ * Может работать в двух режимах:
+ * 1) локальном - когда пользователь выбирает папку через input (файлы передаются в методах)
+ * 2) прокси - когда сервер на джаве предоставляет файл по пути (/api/file?path=...)
  */
 export class FileService {
     constructor() {
         this.httpMethods = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
-        this.allFiles = []; // Все файлы из выбранной папки
+        this.allFiles = []; // используется только в локальном режиме
     }
 
     /**
-     * Обнаружить все проекты (подпапки с openapi.yaml)
+     * Общий fetch-метод для получения содержимого файла (proxy режим)
+     * возвращает null если файл не найден
      */
-    discoverProjects(files) {
-        this.allFiles = Array.from(files);
-        const projects = [];
-        const projectMap = new Map();
-
-        // Найти все openapi.yaml файлы
-        for (const file of this.allFiles) {
-            const rel = file.webkitRelativePath;
-            const parts = rel.split('/');
-            
-            // Ищем openapi.yaml на втором уровне (например, test_requests/Main/openapi.yaml)
-            if (parts.length >= 3 && 
-                (parts[2] === 'openapi.yaml' || parts[2] === 'openapi.yml')) {
-                const projectName = parts[1];
-                
-                if (!projectMap.has(projectName)) {
-                    projectMap.set(projectName, {
-                        name: projectName,
-                        rootPath: parts[0] + '/' + projectName,
-                        openapiFile: file,
-                        fileCount: 0
-                    });
-                }
-            }
+    async getFileContent(path) {
+        const url = '/api/file?path=' + encodeURIComponent(path);
+        const res = await fetch(url);
+        if (!res.ok) {
+            return null;
         }
-
-        // Подсчитать файлы для каждого проекта
-        for (const file of this.allFiles) {
-            const rel = file.webkitRelativePath;
-            for (const [projectName, project] of projectMap.entries()) {
-                if (rel.startsWith(project.rootPath + '/')) {
-                    project.fileCount++;
-                }
-            }
-        }
-
-        return Array.from(projectMap.values());
+        return await res.text();
     }
 
     /**
-     * Прочитать файл как текст
+     * Выяснить, в каком режиме работаем (есть ли у нас файловая коллекция)
      */
-    async readFile(file) {
+    hasLocalFiles() {
+        return this.allFiles && this.allFiles.length > 0;
+    }
+
+    /**
+     * Обнаружить проекты. В локальном режиме сканируем переданные файлы.
+     * В прокси-режиме загружаем redocly.yaml с сервера и парсим.
+     * @param {FileList=} files
+     */
+    async discoverProjects(files) {
+        if (files && files.length > 0) {
+            // старый режим - сканирование локальной папки
+            this.allFiles = Array.from(files);
+            const projects = [];
+            const projectMap = new Map();
+
+            for (const file of this.allFiles) {
+                const rel = file.webkitRelativePath;
+                const parts = rel.split('/');
+                if (parts.length >= 3 &&
+                    (parts[2] === 'openapi.yaml' || parts[2] === 'openapi.yml')) {
+                    const projectName = parts[1];
+                    if (!projectMap.has(projectName)) {
+                        projectMap.set(projectName, {
+                            name: projectName,
+                            rootPath: parts[0] + '/' + projectName,
+                            openapiFile: file,
+                            fileCount: 0
+                        });
+                    }
+                }
+            }
+            for (const file of this.allFiles) {
+                const rel = file.webkitRelativePath;
+                for (const [projectName, project] of projectMap.entries()) {
+                    if (rel.startsWith(project.rootPath + '/')) {
+                        project.fileCount++;
+                    }
+                }
+            }
+            return Array.from(projectMap.values());
+        } else {
+            // прокси-режим: получить redocly.yaml и распарсить проекты
+            const yaml = await this.getFileContent('redocly.yaml');
+            if (!yaml) {
+                throw new Error('redocly.yaml не найден в проекте');
+            }
+            return this.parseRedocly(yaml);
+        }
+    }
+
+    /**
+     * Прочитать файл как текст. Принимает либо File объект (локальный режим), либо строку пути (прокси).
+     */
+    async readFile(fileOrPath) {
+        if (typeof fileOrPath === 'string') {
+            const content = await this.getFileContent(fileOrPath);
+            if (content === null) throw new Error('Не удалось загрузить файл: ' + fileOrPath);
+            return content;
+        }
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(reader.result);
             reader.onerror = reject;
-            reader.readAsText(file);
+            reader.readAsText(fileOrPath);
         });
     }
 
     /**
-     * Индексировать конкретный проект
+     * Индексировать конкретный проект в режиме прокси
      */
     async indexProject(projectName, projectState) {
         projectState.reset();
-        
-        if (!this.allFiles || this.allFiles.length === 0) {
-            throw new Error('Файлы не найдены');
+
+        if (!projectState.availableProjects || projectState.availableProjects.length === 0) {
+            throw new Error('Проекты не загружены');
         }
 
-        // Определяем корневую папку проекта
-        const rootParts = this.allFiles[0].webkitRelativePath.split('/');
-        const baseFolder = rootParts[0]; // например, "test_requests"
-        projectState.projectRoot = baseFolder + '/' + projectName;
-        const schemasPrefix = projectState.projectRoot + '/components/schemas/';
+        const proj = projectState.availableProjects.find(p => p.name === projectName);
+        if (!proj) {
+            throw new Error('Проект ' + projectName + ' не найден');
+        }
 
-        // Построить карту файлов только для данного проекта
-        const fileMap = {};
-        let openapiFile = null;
+        projectState.selectedProjectName = projectName;
+        projectState.projectRoot = proj.rootPath;
 
-        for (const file of this.allFiles) {
-            const rel = file.webkitRelativePath;
-            
-            // Пропускаем файлы, не относящиеся к выбранному проекту
-            if (!rel.startsWith(projectState.projectRoot + '/')) {
-                continue;
-            }
-            
-            fileMap[rel] = file;
-
-            if (rel === projectState.projectRoot + '/openapi.yaml' ||
-                rel === projectState.projectRoot + '/openapi.yml') {
-                openapiFile = file;
-            }
-
-            // Индексация схем
-            const isYaml = rel.endsWith('.yaml') || rel.endsWith('.yml');
-            if (isYaml && rel.startsWith(schemasPrefix)) {
-                projectState.relevantFiles[rel] = file;
-                const fileName = rel.substring(schemasPrefix.length);
-                projectState.schemaFiles[fileName] = file;
-                projectState.schemaFiles[fileName.split('/').pop()] = file;
+        // Получить openapi.yaml с сервера
+        const openapiPath = projectState.projectRoot + '/openapi.yaml';
+        let openapiContent = await this.getFileContent(openapiPath);
+        if (openapiContent === null) {
+            // попробовать .yml
+            openapiContent = await this.getFileContent(projectState.projectRoot + '/openapi.yml');
+            if (openapiContent === null) {
+                throw new Error('Не найден openapi.yaml в корне проекта');
             }
         }
 
-        if (!openapiFile) {
-            throw new Error('Не найден openapi.yaml в корне проекта');
-        }
-
-        // Парсинг openapi.yaml
-        const openapiContent = await this.readFile(openapiFile);
         const pathEntries = this.parsePathsFromOpenapi(openapiContent);
 
-        // Чтение endpoint файлов
         const promises = [];
-
         for (const [apiPath, refPath] of Object.entries(pathEntries)) {
             const fullPath = projectState.projectRoot + '/' + refPath;
-            const file = fileMap[fullPath];
-
-            if (!file) {
-                console.warn(`Файл не найден: ${fullPath} (для ${apiPath})`);
-                continue;
-            }
-
-            projectState.relevantFiles[fullPath] = file;
-            const endpointName = refPath.split('/').pop().replace(/\.(yaml|yml)$/, '');
-
             promises.push(
-                this.readFile(file).then(content => {
+                this.getFileContent(fullPath).then(content => {
+                    if (!content) {
+                        console.warn(`Файл не найден: ${fullPath} (для ${apiPath})`);
+                        return;
+                    }
                     const foundMethods = [];
                     for (const m of this.httpMethods) {
                         if (new RegExp('^' + m + '\\s*:', 'm').test(content)) {
                             foundMethods.push(m);
                         }
                     }
-
+                    const endpointName = refPath.split('/').pop().replace(/\.(yaml|yml)$/, '');
                     projectState.pathsFolders[endpointName] = {
-                        files: {},
+                        apiPath: apiPath,
                         methods: foundMethods,
                         flat: true,
-                        flatFile: file,
-                        flatContent: content,
-                        apiPath: apiPath
+                        flatContent: content
                     };
-
-                    // Виртуальные файлы
-                    projectState.pathsFolders[endpointName].files[endpointName + '.yaml'] = file;
-                    for (const m of foundMethods) {
-                        projectState.pathsFolders[endpointName].files[m + '.yaml'] = file;
-                    }
                 })
             );
         }
 
         await Promise.all(promises);
 
+        // schemasCount можно посчитать из openapiContent
+        const schemasCount = (openapiContent.match(/^[ \t]*schemas\s*:/gm) || []).length;
+
         return {
             endpointsCount: Object.keys(pathEntries).length,
-            schemasCount: Object.keys(projectState.schemaFiles).length
+            schemasCount
         };
     }
 
@@ -217,7 +215,36 @@ export class FileService {
     }
 
     /**
-     * Разрезолвить схему по пути
+     * Распарсить содержимое redocly.yaml и вернуть массив проектов
+     */
+    parseRedocly(content) {
+        const projects = [];
+        const lines = content.split('\n');
+        let currentName = null;
+        for (let line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) continue;
+            const nameMatch = trimmed.match(/^([\w-]+):\s*$/);
+            if (nameMatch) {
+                currentName = nameMatch[1];
+                continue;
+            }
+            if (currentName) {
+                const rootMatch = trimmed.match(/^root:\s*(\S+)/);
+                if (rootMatch) {
+                    let rootPath = rootMatch[1];
+                    // если указан файл openapi.yaml, убираем его
+                    rootPath = rootPath.replace(/\/openapi\.ya?ml$/i, '');
+                    projects.push({ name: currentName, rootPath });
+                    currentName = null;
+                }
+            }
+        }
+        return projects;
+    }
+
+    /**
+     * Разрезолвить схему по пути, загружая файл с сервера
      */
     async resolveSchemaRef(refPath, currentFilePath, projectState) {
         let absolutePath;
@@ -231,18 +258,13 @@ export class FileService {
             absolutePath = currentDir + '/' + refPath;
         }
 
-        if (projectState.relevantFiles[absolutePath]) {
-            return await this.readFile(projectState.relevantFiles[absolutePath]);
-        }
+        const content = await this.getFileContent(absolutePath);
+        if (content !== null) return content;
 
-        // Fallback: поиск по имени
+        // попытка по имени
         const fileName = refPath.split('/').pop();
-        for (const [p, f] of Object.entries(projectState.relevantFiles)) {
-            if (p.endsWith('/' + fileName)) {
-                return await this.readFile(f);
-            }
-        }
-
+        // тут можно попробовать несколько вариантов, но для прокси режима
+        // достаточно получить точный путь из YAML
         return null;
     }
 

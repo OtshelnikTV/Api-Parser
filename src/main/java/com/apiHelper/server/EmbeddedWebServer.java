@@ -2,6 +2,8 @@ package com.apiHelper.server;
 
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectUtil;
+import com.intellij.openapi.vfs.VirtualFile;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
@@ -9,6 +11,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Executors;
 
 /**
@@ -32,8 +35,11 @@ public class EmbeddedWebServer {
         server = HttpServer.create(new InetSocketAddress("localhost", port), 0);
         server.setExecutor(Executors.newFixedThreadPool(4));
         
-        // Only serve static resources for the widget; all logic is handled on the JS side
+        // Static UI resources
         server.createContext("/", this::handleStatic);
+        
+        // File proxy endpoint: client requests path relative to project root
+        server.createContext("/api/file", this::handleGetFile);
         
         server.start();
         LOG.info("Web server started on port " + port);
@@ -111,6 +117,42 @@ public class EmbeddedWebServer {
         }
     }
     
+    /**
+     * Serve a file from project root. Query parameter: path=<relative path>
+     */
+    private void handleGetFile(HttpExchange exchange) throws IOException {
+        if (!"GET".equals(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(405, -1);
+            return;
+        }
+
+        String query = exchange.getRequestURI().getQuery();
+        String path = getQueryParam(query, "path");
+        if (path == null || path.isEmpty()) {
+            exchange.sendResponseHeaders(400, -1);
+            return;
+        }
+
+        VirtualFile baseDir = ProjectUtil.guessProjectDir(project);
+        if (baseDir == null) {
+            exchange.sendResponseHeaders(500, -1);
+            return;
+        }
+
+        VirtualFile file = baseDir.findFileByRelativePath(path);
+        if (file == null || file.isDirectory()) {
+            exchange.sendResponseHeaders(404, -1);
+            return;
+        }
+
+        byte[] content = file.contentsToByteArray();
+        exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
+        exchange.sendResponseHeaders(200, content.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(content);
+        }
+    }
+    
     private String getContentType(String path) {
         if (path.endsWith(".html")) return "text/html; charset=utf-8";
         if (path.endsWith(".css")) return "text/css; charset=utf-8";
@@ -129,5 +171,17 @@ public class EmbeddedWebServer {
         try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
             return socket.getLocalPort();
         }
+    }
+
+    private String getQueryParam(String query, String param) {
+        if (query == null) return null;
+        String[] pairs = query.split("&");
+        for (String pair : pairs) {
+            String[] kv = pair.split("=", 2);
+            if (kv.length == 2 && kv[0].equals(param)) {
+                return java.net.URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
+            }
+        }
+        return null;
     }
 }

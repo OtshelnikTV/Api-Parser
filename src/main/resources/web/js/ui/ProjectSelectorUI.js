@@ -15,10 +15,7 @@ export class ProjectSelectorUI {
     }
 
     setupEventListeners() {
-        // Обработчик выбора папки
-        document.getElementById('project-folder-input').addEventListener('change', (e) => {
-            this.onFolderSelected(e.target.files);
-        });
+        // в прокси-режиме папка не выбирается, проекты загружаются автоматически
 
         // Обработчик кнопки "Далее"
         document.getElementById('btn-save-project').addEventListener('click', () => {
@@ -34,39 +31,7 @@ export class ProjectSelectorUI {
         });
     }
 
-    async onFolderSelected(files) {
-        if (!files || files.length === 0) return;
-
-        LoadingOverlay.show('Сканирование проектов...');
-        LoadingOverlay.updateProgress(`Анализ ${files.length} файлов...`);
-
-        // Небольшая задержка для показа индикатора
-        setTimeout(async () => {
-            try {
-                // Обнаружить все проекты
-                const projects = this.fileService.discoverProjects(files);
-
-                if (projects.length === 0) {
-                    throw new Error('Не найдено ни одного проекта с openapi.yaml');
-                }
-
-                this.projectState.availableProjects = projects;
-
-                // Отобразить список проектов
-                this.displayProjects(projects);
-
-                document.getElementById('project-folder-path').textContent = 
-                    files[0].webkitRelativePath.split('/')[0];
-                document.getElementById('project-folder-picker').classList.add('active');
-
-                LoadingOverlay.hide();
-            } catch (error) {
-                console.error(error);
-                NotificationService.error('Ошибка: ' + error.message);
-                LoadingOverlay.hide();
-            }
-        }, 50);
-    }
+    // Пояснение: в proxy-режиме проекты загружаются при показе экрана
 
     displayProjects(projects) {
         const container = document.getElementById('project-list-container');
@@ -82,7 +47,7 @@ export class ProjectSelectorUI {
                 <div class="project-item-icon">📦</div>
                 <div class="project-item-content">
                     <div class="project-item-name">${DOMHelpers.escape(project.name)}</div>
-                    <div class="project-item-info">${project.fileCount} файлов</div>
+                    <div class="project-item-info">${DOMHelpers.escape(project.rootPath || '')}</div>
                 </div>
             `;
             projectList.appendChild(projectItem);
@@ -97,7 +62,6 @@ export class ProjectSelectorUI {
             el.classList.remove('selected');
         });
 
-        // Выделить выбранный проект
         const selectedEl = document.querySelector(`[data-project-name="${projectName}"]`);
         if (selectedEl) {
             selectedEl.classList.add('selected');
@@ -135,8 +99,23 @@ export class ProjectSelectorUI {
         this.onNext();
     }
 
-    show() {
+    async show() {
         DOMHelpers.hideAllScreens();
         DOMHelpers.show('setup-project');
+        // загрузить проекты с сервера
+        LoadingOverlay.show('Загрузка проектов...');
+        try {
+            const projects = await this.fileService.discoverProjects();
+            if (projects.length === 0) {
+                throw new Error('Не найдено ни одного проекта в redocly.yaml');
+            }
+            this.projectState.availableProjects = projects;
+            this.displayProjects(projects);
+        } catch (e) {
+            console.error(e);
+            NotificationService.error('Ошибка: ' + e.message);
+        } finally {
+            LoadingOverlay.hide();
+        }
     }
 }

@@ -38,21 +38,20 @@ export class EndpointParserService {
         let methodFilePath;
 
         if (folder.flat) {
-            // Плоский файл
+            // плоский файл, контент заранее загружен
             methodFilePath = projectState.projectRoot + '/paths/' + projectState.selectedRequest + '.yaml';
-            const fullContent = folder.flatContent || await this.fileService.readFile(folder.flatFile);
+            const fullContent = folder.flatContent || await this.fileService.getFileContent(methodFilePath);
             methodContent = this.fileService.extractTopLevelMethod(fullContent, methodToUse);
             if (!methodContent) {
                 throw new Error('Метод ' + methodToUse + ' не найден в файле');
             }
         } else {
-            // Вложенная структура
+            // вложенная структура, запрос на сервер
             methodFilePath = projectState.projectRoot + '/paths/' + projectState.selectedRequest + '/' + methodToUse + '.yaml';
-            const methodFile = folder.files[methodToUse + '.yaml'] || folder.files[methodToUse + '.yml'];
-            if (!methodFile) {
+            methodContent = await this.fileService.getFileContent(methodFilePath);
+            if (!methodContent) {
                 throw new Error('Не найден файл метода ' + methodToUse);
             }
-            methodContent = await this.fileService.readFile(methodFile);
         }
 
         // Parse metadata
@@ -237,19 +236,23 @@ export class EndpointParserService {
      */
     async tryMergeExistingReadme(folder, methodToUse, projectState, parsedData) {
         let readMdContent = null;
+        // Попытка загрузить существующий read.md, игнорируем ошибки 404
+        async function tryLoad(path) {
+            try {
+                const c = await this.fileService.getFileContent(path);
+                return c;
+            } catch (e) {
+                return null;
+            }
+        }
+
         if (folder.flat) {
             const readMdPath1 = projectState.projectRoot + '/paths/' + projectState.selectedRequest + '_' + methodToUse + '_read.md';
             const readMdPath2 = projectState.projectRoot + '/paths/' + projectState.selectedRequest + '_read.md';
-            if (projectState.relevantFiles[readMdPath1]) {
-                readMdContent = await this.fileService.readFile(projectState.relevantFiles[readMdPath1]);
-            } else if (projectState.relevantFiles[readMdPath2]) {
-                readMdContent = await this.fileService.readFile(projectState.relevantFiles[readMdPath2]);
-            }
+            readMdContent = await tryLoad.call(this, readMdPath1) || await tryLoad.call(this, readMdPath2);
         } else {
             const readMdPath = projectState.projectRoot + '/paths/' + projectState.selectedRequest + '/' + methodToUse + '_read.md';
-            if (projectState.relevantFiles[readMdPath]) {
-                readMdContent = await this.fileService.readFile(projectState.relevantFiles[readMdPath]);
-            }
+            readMdContent = await tryLoad.call(this, readMdPath);
         }
 
         if (readMdContent) {

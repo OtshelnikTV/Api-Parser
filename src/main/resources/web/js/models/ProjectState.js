@@ -5,10 +5,8 @@ export class ProjectState {
     constructor() {
         this.availableProjects = []; // Список доступных проектов
         this.selectedProjectName = null; // Имя выбранного проекта
-        this.relevantFiles = {}; // path -> File
         this.projectRoot = '';
-        this.pathsFolders = {}; // endpoint name -> { files, methods, apiPath, ... }
-        this.schemaFiles = {}; // schema name -> File
+        this.pathsFolders = {}; // endpoint name -> { methods, apiPath, ... }
         this.selectedRequest = null;
         this.selectedMethod = null;
         this.schemaCache = {}; // Кэш уже спарсенных схем
@@ -18,10 +16,8 @@ export class ProjectState {
      * Сброс состояния
      */
     reset() {
-        this.relevantFiles = {};
         this.projectRoot = '';
         this.pathsFolders = {};
-        this.schemaFiles = {};
         this.selectedRequest = null;
         this.selectedMethod = null;
         this.schemaCache = {};
