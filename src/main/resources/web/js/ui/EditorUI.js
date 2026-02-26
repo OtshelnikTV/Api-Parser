@@ -242,8 +242,9 @@ export class EditorUI {
         const isReq = type === 'request';
         const value = isReq ? this.parsedData.exampleRequest : this.parsedData.exampleResponse;
         const binding = isReq ? 'parsedData.exampleRequest' : 'parsedData.exampleResponse';
-        
-        return `<div class="info-note"><span class="info-note-icon">✏️</span><span>Пример сгенерирован из DTO. Замените значения на реалистичные.</span></div>
+        const fromMdFlag = isReq ? this.parsedData.exampleRequestFromMd : this.parsedData.exampleResponseFromMd;
+        const note = fromMdFlag ? '' : `<div class="info-note"><span class="info-note-icon">✏️</span><span>Пример сгенерирован из DTO. Замените значения на реалистичные.</span></div>`;
+        return `${note}
             <textarea class="block-editor highlight-manual" data-bind="${binding}" placeholder='{"field":"value"}'>${DOMHelpers.escape(value)}</textarea>`;
     }
 
@@ -460,14 +461,21 @@ export class EditorUI {
     }
 
     renderLogic() {
-        return `<div class="info-note"><span class="info-note-icon">🔴</span><span>Опишите алгоритм.</span></div>
+        // only prompt if there's no algorithm at all
+        const note = this.parsedData.algorithm && this.parsedData.algorithm.trim()
+            ? ''
+            : `<div class="info-note"><span class="info-note-icon">🔴</span><span>Опишите алгоритм.</span></div>`;
+        return `${note}
             <textarea class="block-editor highlight-required" data-bind="parsedData.algorithm" 
                 placeholder="ВХОД: DTO&#10;ШАГ 1: ...&#10;ВЫХОД: 200 OK" 
                 style="min-height:200px;">${DOMHelpers.escape(this.parsedData.algorithm)}</textarea>`;
     }
 
     renderNotes() {
-        return `<div class="info-note"><span class="info-note-icon">🔴</span><span>Примечания.</span></div>
+        const note = this.parsedData.notes && this.parsedData.notes.trim()
+            ? ''
+            : `<div class="info-note"><span class="info-note-icon">🔴</span><span>Примечания.</span></div>`;
+        return `${note}
             <textarea class="block-editor highlight-required" data-bind="parsedData.notes" 
                 placeholder="- Edge cases..." 
                 style="min-height:150px;">${DOMHelpers.escape(this.parsedData.notes)}</textarea>`;

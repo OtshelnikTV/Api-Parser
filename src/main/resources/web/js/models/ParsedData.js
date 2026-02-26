@@ -22,11 +22,14 @@ export class ParsedData {
         // Other
         this.dependencies = [];
         this.algorithm = '';
+        this.algorithmFromMd = false;          // true if overridden by existing readme
         this.mermaidDiagram = '';
         this.notes = '';
         this.errorResponses = [];
         this.exampleRequest = '';
+        this.exampleRequestFromMd = false;
         this.exampleResponse = '';
+        this.exampleResponseFromMd = false;
     }
 
     /**
@@ -46,11 +49,14 @@ export class ParsedData {
         this.responses = {};
         this.dependencies = [];
         this.algorithm = '';
+        this.algorithmFromMd = false;
         this.mermaidDiagram = '';
         this.notes = '';
         this.errorResponses = [];
         this.exampleRequest = '';
+        this.exampleRequestFromMd = false;
         this.exampleResponse = '';
+        this.exampleResponseFromMd = false;
     }
 
     /**

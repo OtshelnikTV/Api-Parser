@@ -18,8 +18,10 @@ export class FileService {
      */
     async getFileContent(path) {
         const url = '/api/file?path=' + encodeURIComponent(path);
+        console.log('[FileService] fetching', url);
         const res = await fetch(url);
         if (!res.ok) {
+            console.warn('[FileService] failed to fetch', url, res.status);
             return null;
         }
         return await res.text();
@@ -143,11 +145,15 @@ export class FileService {
                         }
                     }
                     const endpointName = refPath.split('/').pop().replace(/\.(yaml|yml)$/, '');
+                    // directory containing the yaml file, relative to project root
+                    const slash = refPath.lastIndexOf('/');
+                    const folderPath = slash !== -1 ? refPath.substring(0, slash) : endpointName;
                     projectState.pathsFolders[endpointName] = {
                         apiPath: apiPath,
                         methods: foundMethods,
                         flat: true,
-                        flatContent: content
+                        flatContent: content,
+                        folderPath: folderPath
                     };
                 })
             );
