@@ -390,9 +390,10 @@ export class EndpointParserService {
                 };
 
                 // Универсальный парсер мета‑таблицы (Параметр | Значение)
-                const metaTable = depMatch[3].match(/\|[\s\S]*?\|\n\|[-|]+\|\n([\s\S]*?)(?=\n\n|####|###|##|$)/);
+                // use \r?\n everywhere to handle Windows line endings; otherwise a CR before the \n
+                const metaTable = depMatch[3].match(/\|[\s\S]*?\|\r?\n\|[-|]+\|\r?\n([\s\S]*?)(?=(?:\r?\n){2}|####|###|##|$)/);
                 if (metaTable) {
-                    const rows = metaTable[1].trim().split('\n');
+                    const rows = metaTable[1].trim().split(/\r?\n/);
                     for (const row of rows) {
                         const cells = row.split('|').map(c => c.trim());
                         if (cells.length >= 3) {
@@ -418,10 +419,10 @@ export class EndpointParserService {
                     }
                 }
 
-                const inputMatch = depMatch[3].match(/#### Входные параметры[\s\S]*?\|[-|]+\|\n([\s\S]*?)(?=\n\n|####|###|##|$)/);
+                const inputMatch = depMatch[3].match(/#### Входные параметры[\s\S]*?\|[-|]+\|\r?\n([\s\S]*?)(?=(?:\r?\n){2}|####|###|##|$)/);
                 if (inputMatch) {
                     // convert to array of {param, source, transform}
-                    const rows = inputMatch[1].trim().split('\n').map(l => {
+                    const rows = inputMatch[1].trim().split(/\r?\n/).map(l => {
                         const cells = l.split('|').map(s => s.trim()).filter(s => s !== '');
                         return {
                             param: cells[0] || '',
@@ -432,9 +433,9 @@ export class EndpointParserService {
                     dep.inputParams = rows;
                 }
 
-                const outputMatch = depMatch[3].match(/#### Параметры ответа[\s\S]*?\|[-|]+\|\n([\s\S]*?)(?=\n---|###|##|$)/);
+                const outputMatch = depMatch[3].match(/#### Параметры ответа[\s\S]*?\|[-|]+\|\r?\n([\s\S]*?)(?=(?:\r?\n)---|###|##|$)/);
                 if (outputMatch) {
-                    const rows = outputMatch[1].trim().split('\n').map(l => {
+                    const rows = outputMatch[1].trim().split(/\r?\n/).map(l => {
                         const cells = l.split('|').map(s => s.trim()).filter(s => s !== '');
                         return {
                             field: cells[0] || '',
