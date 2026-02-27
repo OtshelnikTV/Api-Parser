@@ -357,28 +357,75 @@ export class App {
     /**
      * Сгенерировать и сохранить Markdown
      */
-    generateAndSave() {
+    async generateAndSave() {
         const markdown = this.markdownGenerator.generate(this.parsedData);
-        const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        const fileName = this.parsedData.method.toLowerCase() + '_read.md';
-        a.download = fileName;
-        a.style.display = 'none';
-        document.body.appendChild(a);
 
-        // Задержка для антивируса Windows
-        setTimeout(() => {
-            a.click();
+        // if working with local files, fall back to simple download
+        if (this.fileService.hasLocalFiles()) {
+            const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const fileName = this.parsedData.method.toUpperCase() + '_' + this.projectState.selectedRequest + '.md';
+            a.download = fileName;
+            a.style.display = 'none';
+            document.body.appendChild(a);
             setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 1000);
-        }, 100);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 1000);
+            }, 100);
+            NotificationService.success(fileName + ' сохранён!');
+            this.closePreview();
+            return;
+        }
 
-        NotificationService.success(fileName + ' сохранён!');
+        // proxy mode: compute target folder and file name relative to project root
+        const folder = this.projectState.getSelectedRequestFolder();
+        if (!folder) {
+            NotificationService.error('Не выбрана папка для сохранения');
+            return;
+        }
+        const yamlName = this.projectState.selectedRequest;
+        const method = this.parsedData.method.toUpperCase();
+        // determine folder path (matches logic in EndpointParserService)
+        let relFolder;
+        if (folder.flat) {
+            relFolder = folder.folderPath || ('paths/' + yamlName);
+        } else {
+            relFolder = 'paths/' + yamlName;
+        }
+        const fileName = `${method}_${yamlName}.md`;
+        const relPath = relFolder + '/' + fileName;
+
+        // prepend projectRoot if defined (frontend keeps it relative)
+        const prefix = this.projectState.projectRoot ? this.projectState.projectRoot + '/' : '';
+        const serverFolder = prefix + relFolder;
+        const serverPath = prefix + relPath;
+
+        // ensure directory exists on server
+        const folderExists = await this.fileService.fileExists(serverFolder);
+        if (!folderExists) {
+            NotificationService.error(`Папка ${serverFolder} не существует`);
+            return;
+        }
+
+        // if markdown already exists, ask before overwrite
+        const fileExists = await this.fileService.fileExists(serverPath);
+        if (fileExists) {
+            const yes = confirm(`Файл ${fileName} уже существует. Перезаписать?`);
+            if (!yes) return;
+        }
+
+        try {
+            await this.fileService.saveMarkdown(serverPath, markdown);
+            NotificationService.success(fileName + ' сохранён!');
+        } catch (err) {
+            console.error('save error', err);
+            NotificationService.error('Ошибка сохранения: ' + err.message);
+        }
         this.closePreview();
     }
 }

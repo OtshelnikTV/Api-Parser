@@ -40,6 +40,10 @@ public class EmbeddedWebServer {
         
         // File proxy endpoint: client requests path relative to project root
         server.createContext("/api/file", this::handleGetFile);
+        // Existence check (returns 200 if path exists, 404 otherwise)
+        server.createContext("/api/exists", this::handleExists);
+        // Save markdown or other text to workspace
+        server.createContext("/api/save", this::handleSaveFile);
         
         server.start();
         LOG.info("Web server started on port " + port);
@@ -115,6 +119,77 @@ public class EmbeddedWebServer {
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(response.getBytes());
         }
+    }
+
+    /**
+     * Проверка существования файла или директории
+     */
+    private void handleExists(HttpExchange exchange) throws IOException {
+        if (!"GET".equals(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(405, -1);
+            return;
+        }
+        String query = exchange.getRequestURI().getQuery();
+        String path = getQueryParam(query, "path");
+        if (path == null || path.isEmpty()) {
+            exchange.sendResponseHeaders(400, -1);
+            return;
+        }
+
+        VirtualFile baseDir = ProjectUtil.guessProjectDir(project);
+        if (baseDir == null) {
+            exchange.sendResponseHeaders(500, -1);
+            return;
+        }
+
+        VirtualFile file = baseDir.findFileByRelativePath(path);
+        if (file == null) {
+            exchange.sendResponseHeaders(404, -1);
+        } else {
+            exchange.sendResponseHeaders(200, -1);
+        }
+    }
+
+    /**
+     * Сохранение файла в рабочую папку. Тело запроса — содержимое.
+     * Путь передаётся в query param `path`.
+     * Если папка не существует, возвращается 404.
+     */
+    private void handleSaveFile(HttpExchange exchange) throws IOException {
+        if (!"POST".equals(exchange.getRequestMethod())) {
+            exchange.sendResponseHeaders(405, -1);
+            return;
+        }
+        String query = exchange.getRequestURI().getQuery();
+        String path = getQueryParam(query, "path");
+        if (path == null || path.isEmpty()) {
+            exchange.sendResponseHeaders(400, -1);
+            return;
+        }
+
+        VirtualFile baseDir = ProjectUtil.guessProjectDir(project);
+        if (baseDir == null) {
+            exchange.sendResponseHeaders(500, -1);
+            return;
+        }
+
+        java.io.File dest = new java.io.File(baseDir.getPath(), path);
+        java.io.File parent = dest.getParentFile();
+        if (parent == null || !parent.exists() || !parent.isDirectory()) {
+            // папки нет
+            exchange.sendResponseHeaders(404, -1);
+            return;
+        }
+
+        try (OutputStream os = new java.io.FileOutputStream(dest)) {
+            exchange.getRequestBody().transferTo(os);
+        } catch (Exception e) {
+            LOG.error("Error writing file " + dest, e);
+            exchange.sendResponseHeaders(500, -1);
+            return;
+        }
+
+        exchange.sendResponseHeaders(200, -1);
     }
     
     /**

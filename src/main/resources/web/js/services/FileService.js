@@ -99,6 +99,51 @@ export class FileService {
     }
 
     /**
+     * Проверяет существование файла или папки на сервере (прокси-режим).
+     * Возвращает true если ресурс найден, false при 404.
+     * В локальном режиме всегда возвращает false, т.к. мы не можем
+     * записывать в локальную файловую систему из браузера.
+     */
+    async fileExists(path) {
+        if (this.hasLocalFiles()) return false;
+        const url = '/api/exists?path=' + encodeURIComponent(path);
+        const res = await fetch(url);
+        return res.ok;
+    }
+
+    /**
+     * Сохраняет markdown-контент на сервере по относительному пути.
+     * В теле запроса передаётся сам markdown; метод возвращает промис,
+     * который резолвится при успешном сохранении и реджектится при ошибке.
+     */
+    async saveMarkdown(path, content) {
+        if (this.hasLocalFiles()) {
+            // в локальном режиме сохраняем через скачивание
+            const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = path.split('/').pop();
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            return;
+        }
+
+        const url = '/api/save?path=' + encodeURIComponent(path);
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/markdown; charset=utf-8' },
+            body: content
+        });
+        if (!res.ok) {
+            throw new Error('status ' + res.status);
+        }
+    }
+
+    /**
      * Индексировать конкретный проект в режиме прокси
      */
     async indexProject(projectName, projectState) {
