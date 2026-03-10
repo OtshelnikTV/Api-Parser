@@ -410,8 +410,9 @@ export class EditorUI {
             fieldsHTML += `
                 <div class="kv-label">Метод</div>
                 <div class="kv-value cell-required">
-                    <input type="text" class="cell-input" value="${DOMHelpers.escape(dep.method || 'GET')}"
-                        data-bind="parsedData.dependencies[${i}].method" placeholder="GET">
+                    <select class="cell-input" data-bind="parsedData.dependencies[${i}].method">
+                        ${['GET', 'POST', 'PUT', 'DELETE'].map(m => `<option value="${m}" ${(dep.method || 'GET').toUpperCase() === m ? 'selected' : ''}>${m}</option>`).join('')}
+                    </select>
                 </div>
                 <div class="kv-label">URL</div>
                 <div class="kv-value cell-required">
