@@ -181,6 +181,10 @@ body {
     display: block;
 }
 
+#confirm-modal {
+    z-index: 2000;
+}
+
 /* Step Indicator */
 .step-indicator {
     display: flex;

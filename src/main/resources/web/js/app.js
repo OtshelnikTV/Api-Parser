@@ -9,6 +9,7 @@ import { RequestSelectorUI } from './ui/RequestSelectorUI.js';
 import { MethodSelectorUI } from './ui/MethodSelectorUI.js';
 import { EditorUI } from './ui/EditorUI.js';
 import { DOMHelpers } from './utils/DOMHelpers.js';
+import { ConfirmDialog } from './utils/ConfirmDialog.js';
 import { LoadingOverlay } from './utils/LoadingOverlay.js';
 import { NotificationService } from './utils/NotificationService.js';
 import themeSwitcher from './utils/ThemeSwitcher.js';
@@ -415,7 +416,7 @@ export class App {
         // if markdown already exists, ask before overwrite
         const fileExists = await this.fileService.fileExists(serverPath);
         if (fileExists) {
-            const yes = confirm(`Файл ${fileName} уже существует. Перезаписать?`);
+            const yes = await ConfirmDialog.show(`Файл ${fileName} уже существует. Перезаписать?`);
             if (!yes) return;
         }
 
