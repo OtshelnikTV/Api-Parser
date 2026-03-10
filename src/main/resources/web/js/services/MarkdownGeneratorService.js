@@ -229,6 +229,25 @@ export class MarkdownGeneratorService {
     fieldsToMdRows(fields, includeSource = false, prefix = '', depth = 0) {
         const rows = [];
         for (const f of fields) {
+            // Заголовок варианта составной схемы (oneOf / anyOf)
+            if (f.type === '__group__') {
+                const variantLabel = f.refName ? `${f.name}` : f.name;
+                // Описание: summary из схемы; в Пример — список всех вариантов (только для request, где 6 колонок)
+                const descCell = f.description || '—';
+                const exampleCell = f.example || '—';
+                if (includeSource) {
+                    // 6 колонок: Поле, Тип, Обязательный, Формат, Описание, Источник
+                    rows.push([`**${f.compositeType}** ${variantLabel}`, `\`${f.compositeType}\``, '—', '—', descCell, exampleCell]);
+                } else {
+                    // 5 колонок: Поле, Тип, Обязательный, Формат, Описание
+                    rows.push([`**${f.compositeType}** ${variantLabel}`, `\`${f.compositeType}\``, '—', '—', `${descCell} (${exampleCell})`.replace(' (—)', '')]);
+                }
+                if (f.children && f.children.length) {
+                    rows.push(...this.fieldsToMdRows(f.children, includeSource, prefix, depth + 1));
+                }
+                continue;
+            }
+
             const indent = '  '.repeat(depth * 2);
             const treeSymbol = depth > 0 ? '└─ ' : '';
 
@@ -248,12 +267,18 @@ export class MarkdownGeneratorService {
                 typeName = f.refName;
             }
 
+            // Для составных полей (value.oneOf / value.anyOf) добавляем список вариантов в описание
+            let descText = f.description || '—';
+            if (f.compositeType && f.example) {
+                descText = descText === '—' ? f.example : `${descText} (${f.example})`;
+            }
+
             const row = [
                 '`' + visualName + '`',
                 '`' + typeName + '`',
                 f.required ? '✅' : '❌',
                 f.format || '—',
-                f.description || '—'
+                descText
             ];
 
             if (includeSource) {
@@ -276,6 +301,12 @@ export class MarkdownGeneratorService {
     flattenFieldsForDisplay(fields, depth = 0) {
         const result = [];
         for (const f of fields) {
+            if (f.type === '__group__') {
+                if (f.children && f.children.length > 0) {
+                    result.push(...this.flattenFieldsForDisplay(f.children, depth));
+                }
+                continue;
+            }
             result.push({
                 name: f.name,
                 refName: f.refName,

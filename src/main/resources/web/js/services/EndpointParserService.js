@@ -589,6 +589,22 @@ export class EndpointParserService {
      */
     generateExampleFromFields(fields) {
         const obj = {};
+
+        // Составная схема (oneOf / anyOf): использовать поля первого варианта
+        const firstGroup = fields.find(f => f.type === '__group__');
+        if (firstGroup) {
+            const compositeType = firstGroup.compositeType;
+            const variantNames = fields
+                .filter(f => f.type === '__group__')
+                .map(f => f.refName || f.name)
+                .join(' | ');
+            obj[`_${compositeType}`] = `Один из вариантов: ${variantNames}`;
+            if (firstGroup.children && firstGroup.children.length > 0) {
+                Object.assign(obj, this.generateExampleFromFields(firstGroup.children));
+            }
+            return obj;
+        }
+
         for (const f of fields) {
             if (f.children && f.children.length > 0) {
                 const childObj = this.generateExampleFromFields(f.children);

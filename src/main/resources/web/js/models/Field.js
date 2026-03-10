@@ -14,6 +14,7 @@ export class Field {
         this.refName = ''; // Имя DTO для refs
         this.children = []; // Вложенные поля
         this.source = ''; // Источник данных для поля
+        this.compositeType = ''; // 'oneOf' | 'anyOf' | '' для составных схем
     }
 
     /**
@@ -29,6 +30,7 @@ export class Field {
         field.isArray = obj.isArray || false;
         field.refName = obj.refName || '';
         field.source = obj.source || '';
+        field.compositeType = obj.compositeType || '';
         
         if (obj.children && Array.isArray(obj.children)) {
             field.children = obj.children.map(c => Field.fromObject(c));

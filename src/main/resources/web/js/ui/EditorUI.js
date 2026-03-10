@@ -168,12 +168,24 @@ export class EditorUI {
 
         const flat = FieldHelpers.flattenFields(fields);
 
-        // Информация о вложенных структурах
+        // Информация о вложенных/составных структурах
+        const compositeHeaders = flat.filter(f => f.isGroupHeader);
+        const isComposite = compositeHeaders.length > 0;
         const maxDepth = Math.max(...flat.map(f => f.depth), 0);
-        const hasNested = maxDepth > 0;
+        const hasNested = !isComposite && maxDepth > 0;
 
         let infoPanel = '';
-        if (hasNested) {
+        if (isComposite) {
+            const compositeType = compositeHeaders[0].compositeType;
+            const schemaNames = [...new Set(compositeHeaders.filter(f => f.refName).map(f => f.refName))];
+            const schemasLabel = schemaNames.length
+                ? `, использованы схемы: ${schemaNames.map(s => '<code>' + DOMHelpers.escape(s) + '</code>').join(', ')}`
+                : '';
+            infoPanel = `<div class="info-note" style="margin-bottom:12px;">
+                <span class="info-note-icon">🔀</span>
+                <span>Составная схема <strong>${DOMHelpers.escape(compositeType)}</strong>: ${compositeHeaders.length} вариант(а)${schemasLabel}</span>
+            </div>`;
+        } else if (hasNested) {
             const nestedCount = flat.filter(f => f.depth > 0).length;
             const schemaNames = [...new Set(flat.filter(f => f.refName).map(f => f.refName))];
             infoPanel = `<div class="info-note" style="margin-bottom:12px;">
@@ -185,6 +197,29 @@ export class EditorUI {
         let rows = '';
         for (let i = 0; i < flat.length; i++) {
             const f = flat[i];
+
+            // Заголовок варианта составной схемы (oneOf / anyOf)
+            if (f.isGroupHeader) {
+                const refBadgeGroup = f.refName
+                    ? `<span class="nested-dto-badge">${DOMHelpers.escape(f.refName)}</span>`
+                    : '';
+                const nameCell = `<div class="field-name-wrapper">
+                        <span class="composite-badge composite-badge-${f.compositeType}">${DOMHelpers.escape(f.compositeType)}</span>
+                        <span class="composite-variant-name">${DOMHelpers.escape(f.name)}</span>${refBadgeGroup}
+                    </div>`;
+                const sourceCell = showSource ? `<td class="cell-auto"><span class="cell-static">—</span></td>` : '';
+                rows += `<tr class="composite-group-header">
+                    <td class="cell-auto"><span class="cell-static">${nameCell}</span></td>
+                    <td class="cell-auto"><span class="cell-static"><code>${DOMHelpers.escape(f.compositeType)}</code></span></td>
+                    <td class="cell-auto"><span class="cell-static">—</span></td>
+                    <td class="cell-auto"><span class="cell-static">—</span></td>
+                    <td class="cell-auto"><span class="cell-static">${DOMHelpers.escape(f.description || '—')}</span></td>
+                    <td class="cell-auto"><span class="cell-static">${DOMHelpers.escape(f.example || '—')}</span></td>
+                    ${sourceCell}
+                </tr>`;
+                continue;
+            }
+
             const indentPx = f.depth * 24;
 
             // Древовидная структура
@@ -201,10 +236,18 @@ export class EditorUI {
             // Бейджи
             const refBadge = f.refName ? `<span class="nested-dto-badge">${DOMHelpers.escape(f.refName)}</span>` : '';
             const arrayBadge = f.isArray ? '<span class="array-badge">[]</span>' : '';
+            const compositeBadge = (f.compositeType && f.type !== '__group__')
+                ? `<span class="composite-badge composite-badge-${f.compositeType}">${DOMHelpers.escape(f.compositeType)}</span>`
+                : '';
 
             const nameDisplay = `<div class="field-name-wrapper" style="margin-left:${indentPx}px">${depthMarker}<code>${DOMHelpers.escape(f.name)}</code>${arrayBadge}${refBadge}</div>`;
 
             const rowClass = f.depth > 0 ? ' nested-field' : '';
+
+            // Тип: для составных полей (oneOf/anyOf) показываем бейдж вместо кода
+            const typeDisplay = (f.compositeType && f.type !== '__group__')
+                ? compositeBadge
+                : `<code>${DOMHelpers.escape(f.type)}</code>`;
 
             // Если showSource = true, добавляем столбец "Источник"
             const sourceCell = showSource ? `<td class="cell-required">
@@ -213,7 +256,7 @@ export class EditorUI {
 
             rows += `<tr class="${rowClass}">
                 <td class="cell-auto"><span class="cell-static">${nameDisplay}</span></td>
-                <td class="cell-auto"><span class="cell-static"><code>${DOMHelpers.escape(f.type)}</code></span></td>
+                <td class="cell-auto"><span class="cell-static">${typeDisplay}</span></td>
                 <td class="cell-auto"><span class="cell-static">${f.required ? '✅' : '❌'}</span></td>
                 <td class="cell-auto"><span class="cell-static">${DOMHelpers.escape(f.format || '—')}</span></td>
                 <td class="${f.description ? 'cell-auto' : 'cell-manual'}">

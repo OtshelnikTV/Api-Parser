@@ -11,7 +11,33 @@ export class FieldHelpers {
             const f = fields[i];
             const displayName = prefix ? `${prefix}.${f.name}` : f.name;
             const fieldPath = depth === 0 ? `${pathPrefix}[${i}]` : `${pathPrefix}.children[${i}]`;
-            
+
+            if (f.type === '__group__') {
+                // Заголовок варианта oneOf/anyOf
+                result.push({
+                    name: f.name,
+                    displayName: f.name,
+                    type: '__group__',
+                    compositeType: f.compositeType,
+                    description: f.description || '',
+                    format: '',
+                    example: f.example || '',
+                    required: false,
+                    depth: depth,
+                    refName: f.refName || '',
+                    isArray: false,
+                    source: '',
+                    hasChildren: false,
+                    fieldRef: f,
+                    fieldPath: fieldPath,
+                    isGroupHeader: true
+                });
+                if (f.children && f.children.length > 0) {
+                    result.push(...this.flattenFields(f.children, prefix, depth + 1, fieldPath));
+                }
+                continue;
+            }
+
             result.push({
                 name: f.name,
                 displayName: displayName,
@@ -41,6 +67,22 @@ export class FieldHelpers {
      */
     static generateExampleFromFields(fields) {
         const obj = {};
+
+        // Составная схема (oneOf / anyOf): использовать поля первого варианта
+        const firstGroup = fields.find(f => f.type === '__group__');
+        if (firstGroup) {
+            const compositeType = firstGroup.compositeType;
+            const variantNames = fields
+                .filter(f => f.type === '__group__')
+                .map(f => f.refName || f.name)
+                .join(' | ');
+            obj[`_${compositeType}`] = `Один из вариантов: ${variantNames}`;
+            if (firstGroup.children && firstGroup.children.length > 0) {
+                Object.assign(obj, this.generateExampleFromFields(firstGroup.children));
+            }
+            return obj;
+        }
+
         for (const f of fields) {
             if (f.children && f.children.length > 0) {
                 const childObj = this.generateExampleFromFields(f.children);
