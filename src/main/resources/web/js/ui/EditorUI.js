@@ -492,7 +492,7 @@ export class EditorUI {
             : `<div class="info-note"><span class="info-note-icon">🔴</span><span>Примечания.</span></div>`;
         return `${note}
             <textarea class="block-editor highlight-required" data-bind="parsedData.notes" 
-                placeholder="- Edge cases..." 
+                placeholder="- Примечания..." 
                 style="min-height:150px;">${DOMHelpers.escape(this.parsedData.notes)}</textarea>`;
     }
 
