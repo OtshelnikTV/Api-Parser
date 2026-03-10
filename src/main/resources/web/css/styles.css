@@ -815,6 +815,24 @@ select.cell-input option {
     background: rgba(248, 81, 73, 0.1);
 }
 
+.insert-row-btn {
+    background: none;
+    border: none;
+    color: var(--accent-blue);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+    border-radius: 4px;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+    line-height: 1;
+}
+
+.insert-row-btn:hover {
+    opacity: 1;
+    background: rgba(88, 166, 255, 0.1);
+}
+
 /* Dependency Card */
 .dep-card {
     background: var(--bg-input);

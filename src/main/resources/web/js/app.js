@@ -299,6 +299,18 @@ export class App {
                 break;
             }
 
+            case 'insertInputParam': {
+                const depIndex = parseInt(element.dataset.depIndex);
+                const paramIndex = parseInt(element.dataset.paramIndex);
+                const dep = this.parsedData.dependencies[depIndex];
+                if (dep && Array.isArray(dep.inputParams)) {
+                    dep.inputParams.splice(paramIndex + 1, 0, { param: '', source: '', transform: '' });
+                    this.editorUI.render();
+                    this.editorUI.updateUnfilledCount();
+                }
+                break;
+            }
+
             case 'removeInputParam': {
                 const depIndex = parseInt(element.dataset.depIndex);
                 const paramIndex = parseInt(element.dataset.paramIndex);
@@ -324,6 +336,18 @@ export class App {
                             : [];
                     }
                     dep.outputFields.push({ field: '', usedIn: '', transform: '' });
+                    this.editorUI.render();
+                    this.editorUI.updateUnfilledCount();
+                }
+                break;
+            }
+
+            case 'insertOutputField': {
+                const depIndex = parseInt(element.dataset.depIndex);
+                const fieldIndex = parseInt(element.dataset.fieldIndex);
+                const dep = this.parsedData.dependencies[depIndex];
+                if (dep && Array.isArray(dep.outputFields)) {
+                    dep.outputFields.splice(fieldIndex + 1, 0, { field: '', usedIn: '', transform: '' });
                     this.editorUI.render();
                     this.editorUI.updateUnfilledCount();
                 }

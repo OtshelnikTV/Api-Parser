@@ -351,7 +351,8 @@ export class EditorUI {
                     <input type="text" class="cell-input" value="${DOMHelpers.escape(p.transform || '')}"
                         data-bind="parsedData.dependencies[${i}].inputParams[${idx}].transform" placeholder="transform">
                 </td>
-                <td style="width:40px;text-align:center;">
+                <td style="width:56px;text-align:center;white-space:nowrap;">
+                    <button class="insert-row-btn" data-action="insertInputParam" data-dep-index="${i}" data-param-index="${idx}" title="Вставить строку после">+</button>
                     <button class="delete-row-btn" data-action="removeInputParam" data-dep-index="${i}" data-param-index="${idx}">✕</button>
                 </td>
             </tr>`;
@@ -371,7 +372,8 @@ export class EditorUI {
                     <input type="text" class="cell-input" value="${DOMHelpers.escape(f.transform || '')}"
                         data-bind="parsedData.dependencies[${i}].outputFields[${idx}].transform" placeholder="transform">
                 </td>
-                <td style="width:40px;text-align:center;">
+                <td style="width:56px;text-align:center;white-space:nowrap;">
+                    <button class="insert-row-btn" data-action="insertOutputField" data-dep-index="${i}" data-field-index="${idx}" title="Вставить строку после">+</button>
                     <button class="delete-row-btn" data-action="removeOutputField" data-dep-index="${i}" data-field-index="${idx}">✕</button>
                 </td>
             </tr>`;
