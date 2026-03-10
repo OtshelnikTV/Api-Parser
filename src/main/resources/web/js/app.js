@@ -129,6 +129,11 @@ export class App {
             if (target.matches('[data-bind]')) {
                 this.handleDataBinding(target);
             }
+            DOMHelpers.updateCellFilled(e.target);
+        });
+
+        document.addEventListener('input', (e) => {
+            DOMHelpers.updateCellFilled(e.target);
         });
 
         // Обработка кнопок действий

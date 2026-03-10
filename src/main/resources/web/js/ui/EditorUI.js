@@ -57,6 +57,9 @@ export class EditorUI {
 
         // Включить авторесайз для всех полей
         DOMHelpers.enableAutoResizeForAll();
+
+        // Обновить состояние cell-filled (IDE не поддерживает CSS :has)
+        DOMHelpers.initCellFilledForAll();
         
         // Добавить обработчики на секции
         this.attachSectionHandlers();
@@ -436,7 +439,6 @@ export class EditorUI {
         }
         // Для ffl_table только Имя и Описание (уже добавлены)
 
-        // --- Остальной HTML без изменений ---
         return `<div class="dep-card" id="dep-${i}">
             <div class="dep-card-header">
                 <span class="dep-card-title">${DOMHelpers.escape(dep.name) || `Зависимость #${i + 1}`}</span>

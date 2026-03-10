@@ -56,4 +56,21 @@ export class DOMHelpers {
             ta.addEventListener('input', () => this.autoResize(ta));
         });
     }
+
+    /**
+     * Обновить класс cell-filled у родительского cell-required
+     * для совместимости с IDE (нет поддержки CSS :has)
+     */
+    static updateCellFilled(el) {
+        const cell = el.closest('.cell-required');
+        if (!cell) return;
+        const filled = el.tagName === 'SELECT' ? true : el.value.trim() !== '';
+        cell.classList.toggle('cell-filled', filled);
+    }
+
+    static initCellFilledForAll() {
+        document.querySelectorAll('.cell-required input, .cell-required textarea, .cell-required select').forEach(el => {
+            DOMHelpers.updateCellFilled(el);
+        });
+    }
 }

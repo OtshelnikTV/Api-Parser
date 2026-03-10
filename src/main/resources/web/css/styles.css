@@ -605,6 +605,17 @@ body {
     50% { opacity: 0.3; }
 }
 
+/* cell-required turns green when filled (class toggled via JS for IDE compatibility) */
+.cell-required.cell-filled {
+    background: rgba(46, 160, 67, 0.05);
+}
+
+.cell-required.cell-filled::before {
+    background: #3fb950;
+    animation: none;
+    opacity: 1;
+}
+
 /* Inputs and Editors */
 .cell-input {
     width: 100%;
