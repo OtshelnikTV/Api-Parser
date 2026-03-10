@@ -452,13 +452,23 @@ export class EditorUI {
             </div>
             <h5 style="color:#8b949e;margin:8px 0;">Входные параметры </h5>
             <div class="table-wrapper"><table class="edit-table">
-                <thead><tr><th>Параметр</th><th>Источник</th><th>Трансформация</th><th></th></tr></thead>
+                <thead><tr>
+                    <th><span class="th-hint">Параметр внешнего запроса<span class="th-hint-icon th-hint-icon--start" data-tip="Входной параметр запроса">?</span></span></th>
+                    <th><span class="th-hint">Источник<span class="th-hint-icon" data-tip="Откуда берём значение">?</span></span></th>
+                    <th><span class="th-hint">Трансформация<span class="th-hint-icon" data-tip="Как преобразуем значение">?</span></span></th>
+                    <th></th>
+                </tr></thead>
                 <tbody>${inputParamsRows}</tbody>
             </table></div>
             <button class="add-row-btn" data-action="addInputParam" data-dep-index="${i}">+ Добавить параметр</button>
             <h5 style="color:#8b949e;margin:8px 0;">Параметры ответа </h5>
             <div class="table-wrapper"><table class="edit-table">
-                <thead><tr><th>Параметр</th><th>Используется в</th><th>Трансформация</th><th></th></tr></thead>
+                <thead><tr>
+                    <th><span class="th-hint">Параметр ответа внешнего запроса<span class="th-hint-icon th-hint-icon--start" data-tip="Выходной параметр запроса">?</span></span></th>
+                    <th><span class="th-hint">Используется в<span class="th-hint-icon" data-tip="Где применяется ответ">?</span></span></th>
+                    <th><span class="th-hint">Трансформация<span class="th-hint-icon" data-tip="Как преобразуем значение">?</span></span></th>
+                    <th></th>
+                </tr></thead>
                 <tbody>${outputFieldsRows}</tbody>
             </table></div>
             <button class="add-row-btn" data-action="addOutputField" data-dep-index="${i}">+ Добавить параметр</button>
