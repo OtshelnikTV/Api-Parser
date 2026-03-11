@@ -12,6 +12,7 @@ import { DOMHelpers } from './utils/DOMHelpers.js';
 import { ConfirmDialog } from './utils/ConfirmDialog.js';
 import { LoadingOverlay } from './utils/LoadingOverlay.js';
 import { NotificationService } from './utils/NotificationService.js';
+import { HistoryManager } from './utils/HistoryManager.js';
 import themeSwitcher from './utils/ThemeSwitcher.js';
 
 /**
@@ -22,6 +23,10 @@ export class App {
         // Модели
         this.projectState = new ProjectState();
         this.parsedData = new ParsedData();
+
+        // История для undo/redo
+        this.historyManager = new HistoryManager();
+        this.saveStateTimeout = null;
 
         // Сервисы
         this.fileService = new FileService();
@@ -70,10 +75,14 @@ export class App {
      */
     showProjectSelector() {
         this.projectSelectorUI.show();
+        // Очищаем историю при смене проекта
+        this.historyManager.clear();
     }
 
     showRequestSelector() {
         this.requestSelectorUI.show();
+        // Очищаем историю при смене запроса
+        this.historyManager.clear();
     }
 
     showMethodSelector() {
@@ -82,6 +91,8 @@ export class App {
 
     showEditor() {
         this.editorUI.show();
+        // Инициализируем состояние кнопок
+        this.updateHistoryButtons();
     }
 
     /**
@@ -98,6 +109,11 @@ export class App {
                 await this.endpointParserService.parseEndpoint(this.projectState, this.parsedData);
                 
                 LoadingOverlay.hide();
+                
+                // Очищаем историю и сохраняем начальное состояние
+                this.historyManager.clear();
+                this.historyManager.push(this.parsedData);
+                
                 this.showEditor();
                 
                 NotificationService.success(
@@ -112,6 +128,82 @@ export class App {
     }
 
     /**
+     * Сохранить текущее состояние в историю (с debounce)
+     */
+    saveState() {
+        // Отменяем предыдущий таймер
+        if (this.saveStateTimeout) {
+            clearTimeout(this.saveStateTimeout);
+        }
+
+        // Сохраняем с задержкой 500мс
+        this.saveStateTimeout = setTimeout(() => {
+            this.historyManager.push(this.parsedData);
+            this.updateHistoryButtons();
+        }, 500);
+    }
+
+    /**
+     * Сохранить состояние немедленно (без debounce)
+     */
+    saveStateImmediately() {
+        if (this.saveStateTimeout) {
+            clearTimeout(this.saveStateTimeout);
+        }
+        this.historyManager.push(this.parsedData);
+        this.updateHistoryButtons();
+    }
+
+    /**
+     * Отменить последнее изменение
+     */
+    undo() {
+        const state = this.historyManager.undo();
+        if (state) {
+            this.restoreState(state);
+        }
+    }
+
+    /**
+     * Повторить отмененное изменение
+     */
+    redo() {
+        const state = this.historyManager.redo();
+        if (state) {
+            this.restoreState(state);
+        }
+    }
+
+    /**
+     * Восстановить состояние из истории
+     */
+    restoreState(state) {
+        // Копируем все свойства из сохраненного состояния
+        Object.keys(state).forEach(key => {
+            this.parsedData[key] = state[key];
+        });
+
+        // Перерисовываем UI
+        this.editorUI.render();
+        this.updateHistoryButtons();
+    }
+
+    /**
+     * Обновить состояние кнопок undo/redo
+     */
+    updateHistoryButtons() {
+        const undoBtn = document.getElementById('btn-undo');
+        const redoBtn = document.getElementById('btn-redo');
+
+        if (undoBtn) {
+            undoBtn.disabled = !this.historyManager.canUndo();
+        }
+        if (redoBtn) {
+            redoBtn.disabled = !this.historyManager.canRedo();
+        }
+    }
+
+    /**
      * Установка глобальных обработчиков событий
      */
     setupGlobalEventHandlers() {
@@ -123,11 +215,28 @@ export class App {
             });
         }
 
+        // Горячие клавиши для Undo/Redo
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+Z - Undo
+            if (e.ctrlKey && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                this.undo();
+            }
+            // Ctrl+Y или Ctrl+Shift+Z - Redo
+            else if ((e.ctrlKey && e.key.toLowerCase() === 'y') || 
+                     (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'z')) {
+                e.preventDefault();
+                this.redo();
+            }
+        });
+
         // Data binding для всех input/textarea с data-bind
         document.addEventListener('change', (e) => {
             const target = e.target;
             if (target.matches('[data-bind]')) {
                 this.handleDataBinding(target);
+                // Сохраняем состояние при изменении
+                this.saveState();
             }
             DOMHelpers.updateCellFilled(e.target);
         });
@@ -139,6 +248,17 @@ export class App {
         // Обработка кнопок действий
         document.addEventListener('click', (e) => {
             const target = e.target;
+            
+            // Кнопки Undo/Redo
+            if (target.id === 'btn-undo' || target.closest('#btn-undo')) {
+                e.preventDefault();
+                this.undo();
+                return;
+            } else if (target.id === 'btn-redo' || target.closest('#btn-redo')) {
+                e.preventDefault();
+                this.redo();
+                return;
+            }
             
             // Кнопки с data-action
             if (target.matches('[data-action]')) {
@@ -246,6 +366,7 @@ export class App {
                 this.parsedData.errorResponses.push({ code: '', description: '' });
                 this.editorUI.render();
                 this.editorUI.updateUnfilledCount();
+                this.saveStateImmediately();
                 break;
 
             case 'removeErrorResp':
@@ -253,6 +374,7 @@ export class App {
                 this.parsedData.errorResponses.splice(errorIndex, 1);
                 this.editorUI.render();
                 this.editorUI.updateUnfilledCount();
+                this.saveStateImmediately();
                 break;
 
             case 'addDep': {
@@ -269,6 +391,7 @@ export class App {
                 });
                 this.editorUI.render();
                 this.editorUI.updateUnfilledCount();
+                this.saveStateImmediately();
                 break;
             }
 
@@ -277,6 +400,7 @@ export class App {
                 this.parsedData.dependencies.splice(depIndex, 1);
                 this.editorUI.render();
                 this.editorUI.updateUnfilledCount();
+                this.saveStateImmediately();
                 break;
             }
 
@@ -295,6 +419,7 @@ export class App {
                     dep.inputParams.push({ param: '', source: '', transform: '' });
                     this.editorUI.render();
                     this.editorUI.updateUnfilledCount();
+                    this.saveStateImmediately();
                 }
                 break;
             }
@@ -307,6 +432,7 @@ export class App {
                     dep.inputParams.splice(paramIndex + 1, 0, { param: '', source: '', transform: '' });
                     this.editorUI.render();
                     this.editorUI.updateUnfilledCount();
+                    this.saveStateImmediately();
                 }
                 break;
             }
@@ -319,6 +445,7 @@ export class App {
                     dep.inputParams.splice(paramIndex, 1);
                     this.editorUI.render();
                     this.editorUI.updateUnfilledCount();
+                    this.saveStateImmediately();
                 }
                 break;
             }
@@ -338,6 +465,7 @@ export class App {
                     dep.outputFields.push({ field: '', usedIn: '', transform: '' });
                     this.editorUI.render();
                     this.editorUI.updateUnfilledCount();
+                    this.saveStateImmediately();
                 }
                 break;
             }
@@ -350,6 +478,7 @@ export class App {
                     dep.outputFields.splice(fieldIndex + 1, 0, { field: '', usedIn: '', transform: '' });
                     this.editorUI.render();
                     this.editorUI.updateUnfilledCount();
+                    this.saveStateImmediately();
                 }
                 break;
             }
@@ -362,6 +491,7 @@ export class App {
                     dep.outputFields.splice(fieldIndex, 1);
                     this.editorUI.render();
                     this.editorUI.updateUnfilledCount();
+                    this.saveStateImmediately();
                 }
                 break;
             }

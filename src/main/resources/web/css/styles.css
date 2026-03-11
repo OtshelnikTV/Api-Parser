@@ -138,6 +138,34 @@ body {
     font-size: 15px;
 }
 
+.btn-icon {
+    padding: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    min-height: 36px;
+}
+
+.btn-icon:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-icon:disabled:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border-primary);
+}
+
+.btn-group {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 8px;
+}
+
 /* Modal */
 .modal-overlay {
     position: fixed;
