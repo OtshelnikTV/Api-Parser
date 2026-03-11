@@ -432,15 +432,7 @@ export class App {
 
         // prepend projectRoot if defined (frontend keeps it relative)
         const prefix = this.projectState.projectRoot ? this.projectState.projectRoot + '/' : '';
-        const serverFolder = prefix + relFolder;
         const serverPath = prefix + relPath;
-
-        // ensure directory exists on server
-        const folderExists = await this.fileService.fileExists(serverFolder);
-        if (!folderExists) {
-            NotificationService.error(`Папка ${serverFolder} не существует`);
-            return;
-        }
 
         // if markdown already exists, ask before overwrite
         const fileExists = await this.fileService.fileExists(serverPath);

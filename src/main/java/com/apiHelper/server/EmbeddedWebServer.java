@@ -1,8 +1,10 @@
 package com.apiHelper.server;
 
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectUtil;
+import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -122,7 +124,8 @@ public class EmbeddedWebServer {
     }
 
     /**
-     * Проверка существования файла или директории
+     * Проверка существования файла или директории.
+     * Использует File API вместо VirtualFile для быстрой проверки.
      */
     private void handleExists(HttpExchange exchange) throws IOException {
         if (!"GET".equals(exchange.getRequestMethod())) {
@@ -142,18 +145,19 @@ public class EmbeddedWebServer {
             return;
         }
 
-        VirtualFile file = baseDir.findFileByRelativePath(path);
-        if (file == null) {
-            exchange.sendResponseHeaders(404, -1);
-        } else {
+        // Используем File API для быстрой проверки (без индексации VFS)
+        java.io.File file = new java.io.File(baseDir.getPath(), path);
+        if (file.exists()) {
             exchange.sendResponseHeaders(200, -1);
+        } else {
+            exchange.sendResponseHeaders(404, -1);
         }
     }
 
     /**
      * Сохранение файла в рабочую папку. Тело запроса — содержимое.
      * Путь передаётся в query param `path`.
-     * Если папка не существует, возвращается 404.
+     * Автоматически создаёт директории, если их нет.
      */
     private void handleSaveFile(HttpExchange exchange) throws IOException {
         if (!"POST".equals(exchange.getRequestMethod())) {
@@ -175,19 +179,53 @@ public class EmbeddedWebServer {
 
         java.io.File dest = new java.io.File(baseDir.getPath(), path);
         java.io.File parent = dest.getParentFile();
-        if (parent == null || !parent.exists() || !parent.isDirectory()) {
-            // папки нет
-            exchange.sendResponseHeaders(404, -1);
-            return;
+        
+        // Автоматически создать директории, если их нет
+        if (parent != null && !parent.exists()) {
+            if (!parent.mkdirs()) {
+                LOG.error("Failed to create directories: " + parent);
+                String error = "Failed to create directory";
+                exchange.sendResponseHeaders(500, error.length());
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(error.getBytes(StandardCharsets.UTF_8));
+                }
+                return;
+            }
+            LOG.info("Created directories: " + parent);
+            
+            // Обновить VFS для новых директорий
+            final java.io.File finalParent = parent;
+            ApplicationManager.getApplication().invokeLater(() -> {
+                VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(finalParent);
+                if (vf != null) {
+                    vf.refresh(false, true);
+                    LOG.info("VFS refreshed for directory: " + finalParent.getAbsolutePath());
+                }
+            });
         }
 
         try (OutputStream os = new java.io.FileOutputStream(dest)) {
             exchange.getRequestBody().transferTo(os);
+            LOG.info("Saved file: " + dest.getAbsolutePath());
         } catch (Exception e) {
             LOG.error("Error writing file " + dest, e);
-            exchange.sendResponseHeaders(500, -1);
+            String error = "Error writing file: " + e.getMessage();
+            exchange.sendResponseHeaders(500, error.length());
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(error.getBytes(StandardCharsets.UTF_8));
+            }
             return;
         }
+
+        // Обновить VFS, чтобы файл сразу отобразился в IntelliJ
+        final java.io.File finalDest = dest;
+        ApplicationManager.getApplication().invokeLater(() -> {
+            VirtualFile vf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(finalDest);
+            if (vf != null) {
+                vf.refresh(false, false);
+                LOG.info("VFS refreshed for: " + finalDest.getAbsolutePath());
+            }
+        });
 
         exchange.sendResponseHeaders(200, -1);
     }
