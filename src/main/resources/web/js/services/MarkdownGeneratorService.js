@@ -179,15 +179,13 @@ export class MarkdownGeneratorService {
         } else {
             md += `## 4. Внешние зависимости\n\nНет.\n\n---\n\n`;
         }
-
-        md += `## 5. Логика сборки\n\n### Алгоритм\n\n\`\`\`\n${d.algorithm || 'Не указан'}\n\`\`\`\n\n---\n\n`;
         
         // Mermaid диаграмма
         if (d.mermaidDiagram && d.mermaidDiagram.trim()) {
-            md += `## 6. Блок-схема алгоритма\n\n\`\`\`mermaid\n${d.mermaidDiagram}\n\`\`\`\n\n---\n\n`;
+            md += `## 5. Блок-схема алгоритма\n\n\`\`\`mermaid\n${d.mermaidDiagram}\n\`\`\`\n\n---\n\n`;
         }
         
-        md += `## 7. Примечания\n\n${d.notes || 'Нет.'}\n`;
+        md += `## 6. Примечания\n\n${d.notes || 'Нет.'}\n`;
 
         return md;
     }

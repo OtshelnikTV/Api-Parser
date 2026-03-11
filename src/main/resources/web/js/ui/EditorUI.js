@@ -48,9 +48,8 @@ export class EditorUI {
 
         sections += `
             ${this.renderSection('s-deps', '4. Внешние зависимости', 'required', this.renderDependencies())}
-            ${this.renderSection('s-logic', '5. Логика сборки', 'required', this.renderLogic())}
-            ${this.renderSection('s-mermaid', '6. Блок-схема алгоритма', 'required', this.renderMermaidDiagram())}
-            ${this.renderSection('s-notes', '7. Примечания', 'required', this.renderNotes())}
+            ${this.renderSection('s-mermaid', '5. Блок-схема алгоритма', 'required', this.renderMermaidDiagram())}
+            ${this.renderSection('s-notes', '6. Примечания', 'required', this.renderNotes())}
         `;
 
         content.innerHTML = sections;
