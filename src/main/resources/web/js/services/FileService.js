@@ -161,14 +161,18 @@ export class FileService {
         projectState.selectedProjectName = projectName;
         projectState.projectRoot = proj.rootPath;
 
-        // Получить openapi.yaml с сервера
-        const openapiPath = projectState.projectRoot + '/openapi.yaml';
+        // Получить openapi файл с сервера (имя из redocly.yaml)
+        const openapiFileName = proj.openapiFile || 'openapi.yaml';
+        const openapiPath = projectState.projectRoot + '/' + openapiFileName;
         let openapiContent = await this.getFileContent(openapiPath);
         if (openapiContent === null) {
-            // попробовать .yml
-            openapiContent = await this.getFileContent(projectState.projectRoot + '/openapi.yml');
+            // если не получилось по указанному имени, попробовать стандартные варианты
+            openapiContent = await this.getFileContent(projectState.projectRoot + '/openapi.yaml');
             if (openapiContent === null) {
-                throw new Error('Не найден openapi.yaml в корне проекта');
+                openapiContent = await this.getFileContent(projectState.projectRoot + '/openapi.yml');
+                if (openapiContent === null) {
+                    throw new Error('Не найден OpenAPI файл (' + openapiFileName + ') в корне проекта');
+                }
             }
         }
 
@@ -283,10 +287,23 @@ export class FileService {
             if (currentName) {
                 const rootMatch = trimmed.match(/^root:\s*(\S+)/);
                 if (rootMatch) {
-                    let rootPath = rootMatch[1];
-                    // если указан файл openapi.yaml, убираем его
-                    rootPath = rootPath.replace(/\/openapi\.ya?ml$/i, '');
-                    projects.push({ name: currentName, rootPath });
+                    let fullPath = rootMatch[1];
+                    // Извлечь имя файла и корневой путь
+                    const lastSlash = fullPath.lastIndexOf('/');
+                    let rootPath, openapiFile;
+                    if (lastSlash !== -1) {
+                        rootPath = fullPath.substring(0, lastSlash);
+                        openapiFile = fullPath.substring(lastSlash + 1);
+                    } else {
+                        // если нет слеша, весь путь - это имя файла
+                        rootPath = '';
+                        openapiFile = fullPath;
+                    }
+                    projects.push({ 
+                        name: currentName, 
+                        rootPath: rootPath || currentName,
+                        openapiFile: openapiFile
+                    });
                     currentName = null;
                 }
             }
