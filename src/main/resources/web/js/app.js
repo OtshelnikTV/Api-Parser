@@ -128,6 +128,46 @@ export class App {
     }
 
     /**
+     * Повторно спарсить endpoint с сохранением пользовательских данных
+     */
+    async reparseWithUserData() {
+        if (!this.projectState.selectedRequest) return;
+
+        LoadingOverlay.show('Обновление из YAML...');
+
+        setTimeout(async () => {
+            try {
+                // Сохраняем пользовательские данные
+                const userData = this.parsedData.captureUserData();
+                
+                // Парсим заново
+                await this.endpointParserService.parseEndpoint(this.projectState, this.parsedData);
+                
+                // Восстанавливаем пользовательские данные
+                this.parsedData.restoreUserData(userData);
+                
+                LoadingOverlay.hide();
+                
+                // Обновляем UI
+                this.editorUI.render();
+                this.editorUI.updateUnfilledCount();
+                
+                // Сохраняем в историю
+                this.historyManager.push(this.parsedData);
+                this.updateHistoryButtons();
+                
+                NotificationService.success(
+                    `DTO обновлено. Пользовательские данные сохранены.`
+                );
+            } catch (error) {
+                console.error(error);
+                NotificationService.error('Ошибка обновления: ' + error.message);
+                LoadingOverlay.hide();
+            }
+        }, 50);
+    }
+
+    /**
      * Сохранить текущее состояние в историю (с debounce)
      */
     saveState() {
@@ -273,6 +313,9 @@ export class App {
             } else if (target.id === 'btn-editor-back-to-project') {
                 e.preventDefault();
                 this.showProjectSelector();
+            } else if (target.id === 'btn-refresh-dto') {
+                e.preventDefault();
+                this.reparseWithUserData();
             }
 
             // Предпросмотр и генерация
