@@ -22,6 +22,9 @@ export class EditorUI {
     }
 
     render() {
+        // Сохраняем состояние свёрнутых секций перед перерисовкой
+        const collapsedSections = this.getCollapsedSections();
+        
         const content = document.getElementById('editor-content');
         
         let sections = `
@@ -63,8 +66,43 @@ export class EditorUI {
         // Добавить обработчики на секции
         this.attachSectionHandlers();
         
+        // Восстанавливаем состояние свёрнутых секций после перерисовки
+        this.restoreCollapsedSections(collapsedSections);
+        
         // Добавить обработчик для Mermaid редактора
         this.attachMermaidHandlers();
+    }
+
+    /**
+     * Сохраняет ID всех свёрнутых секций
+     */
+    getCollapsedSections() {
+        const collapsedIds = [];
+        document.querySelectorAll('.section-header.collapsed').forEach(header => {
+            const sectionId = header.dataset.section;
+            if (sectionId) {
+                collapsedIds.push(sectionId);
+            }
+        });
+        return collapsedIds;
+    }
+
+    /**
+     * Восстанавливает состояние свёрнутых секций
+     */
+    restoreCollapsedSections(collapsedIds) {
+        if (!collapsedIds || collapsedIds.length === 0) return;
+        
+        collapsedIds.forEach(sectionId => {
+            const header = document.querySelector(`.section-header[data-section="${sectionId}"]`);
+            if (header) {
+                header.classList.add('collapsed');
+                const body = header.nextElementSibling;
+                if (body) {
+                    body.classList.add('collapsed-body');
+                }
+            }
+        });
     }
 
     renderSection(id, title, badgeType, content, collapsed = false) {
