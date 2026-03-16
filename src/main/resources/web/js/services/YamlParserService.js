@@ -104,14 +104,67 @@ export class YamlParserService {
                     case 'example':
                         currentProp.example = val;
                         break;
+                    case 'enum':
+                        // Парсинг enum значений
+                        if (!val) {
+                            // Enum как список на следующих строках
+                            const enumBaseIndent = indent;
+                            for (let j = i + 1; j < lines.length; j++) {
+                                const enumRaw = lines[j];
+                                const enumTrim = enumRaw.trim();
+                                if (enumTrim === '' || enumTrim.startsWith('#')) continue;
+                                const enumInd = enumRaw.length - enumRaw.trimStart().length;
+                                if (enumInd <= enumBaseIndent) break;
+                                if (enumTrim.startsWith('-')) {
+                                    let enumVal = enumTrim.substring(1).trim();
+                                    // Убрать кавычки если есть
+                                    if ((enumVal.startsWith('"') && enumVal.endsWith('"')) || 
+                                        (enumVal.startsWith("'") && enumVal.endsWith("'"))) {
+                                        enumVal = enumVal.slice(1, -1);
+                                    }
+                                    currentProp.enumValues.push(enumVal);
+                                    i = j;
+                                }
+                            }
+                        } else {
+                            // Enum как inline массив (например: enum: [value1, value2])
+                            const inlineMatch = val.match(/\[(.*)\]/);
+                            if (inlineMatch) {
+                                const values = inlineMatch[1].split(',').map(v => v.trim().replace(/['"]/g, ''));
+                                currentProp.enumValues = values;
+                            }
+                        }
+                        // Установить первое значение enum как пример, если пример не задан
+                        if (currentProp.enumValues.length > 0 && !currentProp.example) {
+                            currentProp.example = currentProp.enumValues[0];
+                        }
+                        break;
                     case '$ref':
                         const refPath = val.replace(/['"]/g, '');
                         const refName = refPath.split('/').pop().replace('.yaml', '').replace('.yml', '');
                         currentProp.refName = refName;
                         currentProp.type = currentProp.type || 'object';
-                        if (!visitedRefs.has(refName)) {
-                            const refContent = await this.fileService.resolveSchemaRef(refPath, currentFilePath, projectState);
-                            if (refContent) {
+                        
+                        const refContent = await this.fileService.resolveSchemaRef(refPath, currentFilePath, projectState);
+                        if (refContent) {
+                            // Проверить, не является ли это простым enum на верхнем уровне
+                            const topLevelEnum = this.parseTopLevelEnum(refContent);
+                            if (topLevelEnum) {
+                                // Это простой enum - всегда копировать данные (даже если visitedRefs содержит refName)
+                                currentProp.type = topLevelEnum.type;
+                                currentProp.enumValues = topLevelEnum.enumValues;
+                                currentProp.example = topLevelEnum.example;
+                                if (topLevelEnum.description && !currentProp.description) {
+                                    currentProp.description = topLevelEnum.description;
+                                }
+                                currentProp.children = [];
+                                console.log(`[YamlParser] Applied enum to field "${currentProp.name}":`, {
+                                    type: currentProp.type,
+                                    enumValues: currentProp.enumValues,
+                                    example: currentProp.example
+                                });
+                            } else if (!visitedRefs.has(refName)) {
+                                // Это сложная схема с properties - парсить только если еще не посещена
                                 const newVisited = new Set(visitedRefs);
                                 newVisited.add(refName);
                                 const schemaPath = this.fileService.resolveRelativePath(currentFilePath, refPath);
@@ -183,6 +236,7 @@ export class YamlParserService {
             await this.resolveNestedRef(currentProp, currentPropItemsRef, depth, visitedRefs, fields, currentFilePath, projectState);
         }
 
+        console.log(`[parseSchemaDtoRecursive] Parsed ${fields.length} fields at depth ${depth}:`, fields.map(f => ({name: f.name, type: f.type, hasEnum: f.enumValues?.length > 0, enumValues: f.enumValues})));
         return { fields };
     }
 
@@ -354,9 +408,22 @@ export class YamlParserService {
     async resolveNestedRef(prop, refPath, depth, visitedRefs, fieldsArray, currentFilePath, projectState) {
         const refName = refPath.split('/').pop().replace('.yaml', '').replace('.yml', '');
         prop.refName = refName;
-        if (!visitedRefs.has(refName)) {
-            const refContent = await this.fileService.resolveSchemaRef(refPath, currentFilePath, projectState);
-            if (refContent) {
+        
+        const refContent = await this.fileService.resolveSchemaRef(refPath, currentFilePath, projectState);
+        if (refContent) {
+            // Проверить, не является ли это простым enum на верхнем уровне
+            const topLevelEnum = this.parseTopLevelEnum(refContent);
+            if (topLevelEnum) {
+                // Это простой enum - всегда копировать данные (даже если visitedRefs содержит refName)
+                prop.type = topLevelEnum.type || prop.type || 'string';
+                prop.enumValues = topLevelEnum.enumValues;
+                prop.example = topLevelEnum.example;
+                if (topLevelEnum.description && !prop.description) {
+                    prop.description = topLevelEnum.description;
+                }
+                prop.children = [];
+            } else if (!visitedRefs.has(refName)) {
+                // Это сложная схема с properties - парсить только если еще не посещена
                 const newVisited = new Set(visitedRefs);
                 newVisited.add(refName);
                 const schemaPath = this.fileService.resolveRelativePath(currentFilePath, refPath);
@@ -364,6 +431,75 @@ export class YamlParserService {
                 prop.children = nested.fields;
             }
         }
+    }
+
+    /**
+     * Парсит enum на верхнем уровне схемы (без properties)
+     * Возвращает объект с type, enumValues, example, description или null если это не простой enum
+     */
+    parseTopLevelEnum(content) {
+        // Проверить, есть ли properties - если да, это не простой enum
+        if (content.includes('properties:')) {
+            return null;
+        }
+
+        // Проверить наличие enum на верхнем уровне
+        const enumMatch = content.match(/^enum:\s*$/m);
+        if (!enumMatch) {
+            return null;
+        }
+
+        const result = {
+            enumValues: [],
+            type: 'string',
+            example: '',
+            description: ''
+        };
+
+        // Извлечь type
+        const typeMatch = content.match(/^type:\s*(\w+)/m);
+        if (typeMatch) {
+            result.type = typeMatch[1];
+        }
+
+        // Извлечь description
+        const descMatch = content.match(/^description:\s*(.+)/m);
+        if (descMatch) {
+            result.description = descMatch[1].trim();
+        }
+
+        // Извлечь enum значения
+        const enumIdx = content.indexOf('enum:');
+        if (enumIdx !== -1) {
+            const afterEnum = content.substring(enumIdx + 5);
+            const lines = afterEnum.split('\n');
+            
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.startsWith('#')) continue;
+                if (trimmed.startsWith('-')) {
+                    let enumVal = trimmed.substring(1).trim();
+                    // Убрать кавычки если есть
+                    if ((enumVal.startsWith('"') && enumVal.endsWith('"')) || 
+                        (enumVal.startsWith("'") && enumVal.endsWith("'"))) {
+                        enumVal = enumVal.slice(1, -1);
+                    }
+                    result.enumValues.push(enumVal);
+                } else if (!trimmed.startsWith('type') && !trimmed.startsWith('description')) {
+                    // Встретили другое поле на том же уровне - конец enum
+                    break;
+                }
+            }
+        }
+
+        // Установить первое значение как пример
+        if (result.enumValues.length > 0) {
+            result.example = result.enumValues[0];
+            console.log('[parseTopLevelEnum] Parsed enum:', result);
+            return result;
+        }
+
+        return null;
     }
 
     /**

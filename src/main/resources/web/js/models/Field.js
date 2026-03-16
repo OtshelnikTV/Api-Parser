@@ -15,6 +15,7 @@ export class Field {
         this.children = []; // Вложенные поля
         this.source = ''; // Источник данных для поля
         this.compositeType = ''; // 'oneOf' | 'anyOf' | '' для составных схем
+        this.enumValues = []; // Возможные значения enum
     }
 
     /**
@@ -31,6 +32,7 @@ export class Field {
         field.refName = obj.refName || '';
         field.source = obj.source || '';
         field.compositeType = obj.compositeType || '';
+        field.enumValues = obj.enumValues || [];
         
         if (obj.children && Array.isArray(obj.children)) {
             field.children = obj.children.map(c => Field.fromObject(c));

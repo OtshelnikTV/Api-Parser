@@ -180,6 +180,7 @@ export class EndpointParserService {
                 parsedData.responseSchemas.push({
                     code, description, schemaName: respSchemaName, fields: respFields
                 });
+                console.log(`[parseResponses] Response ${code} schema "${respSchemaName}" has ${respFields.length} fields:`, respFields.map(f => ({name: f.name, type: f.type, hasEnum: f.enumValues?.length > 0})));
             }
         }
 
@@ -229,6 +230,7 @@ export class EndpointParserService {
 
         if (parsedData.responseSchemas.length) {
             const firstResp = parsedData.responseSchemas[0];
+            console.log('[generateDefaults] Generating response example from', firstResp.fields.length, 'fields');
             parsedData.exampleResponse = JSON.stringify(this.generateExampleFromFields(firstResp.fields), null, 2);
             parsedData.exampleResponseFromMd = false;
         }
@@ -305,8 +307,11 @@ export class EndpointParserService {
 
         if (readMdContent) {
             try {
+                console.log('[tryMergeExistingReadme] Found existing read.md, merging...');
+                console.log('[tryMergeExistingReadme] Current exampleResponse has insuranceType:', parsedData.exampleResponse.includes('insuranceType'));
                 const existingData = this.parseExistingMarkdown(readMdContent);
                 this.mergeWithExistingData(existingData, parsedData);
+                console.log('[tryMergeExistingReadme] After merge, exampleResponse has insuranceType:', parsedData.exampleResponse.includes('insuranceType'));
             } catch (e) {
                 console.warn('Не удалось прочитать существующий read.md:', e);
             }
@@ -588,6 +593,7 @@ export class EndpointParserService {
      * Генерация примера JSON из полей
      */
     generateExampleFromFields(fields) {
+        console.log('[generateExampleFromFields] Starting with', fields.length, 'fields:', fields.map(f => f.name));
         const obj = {};
 
         // Составная схема (oneOf / anyOf): использовать поля первого варианта
@@ -606,7 +612,23 @@ export class EndpointParserService {
         }
 
         for (const f of fields) {
-            if (f.children && f.children.length > 0) {
+            // Сначала проверяем enumValues, чтобы корректно обрабатывать $ref на enum-типы
+            if (f.enumValues && f.enumValues.length > 0) {
+                // Использовать первое значение enum как пример
+                const enumValue = f.enumValues[0];
+                console.log(`[generateExample] Field "${f.name}" has enum values:`, f.enumValues, 'Using:', enumValue);
+                if (f.type === 'integer') {
+                    const n = parseInt(enumValue, 10);
+                    obj[f.name] = isNaN(n) ? enumValue : n;
+                } else if (f.type === 'number') {
+                    const n = parseFloat(enumValue);
+                    obj[f.name] = isNaN(n) ? enumValue : n;
+                } else if (f.type === 'boolean') {
+                    obj[f.name] = enumValue === 'true' || enumValue === true;
+                } else {
+                    obj[f.name] = enumValue;
+                }
+            } else if (f.children && f.children.length > 0) {
                 const childObj = this.generateExampleFromFields(f.children);
                 obj[f.name] = f.isArray ? [childObj] : childObj;
             } else if (f.example !== undefined && f.example !== '') {
@@ -649,6 +671,7 @@ export class EndpointParserService {
                 }
             }
         }
+        console.log('[generateExampleFromFields] Generated object with keys:', Object.keys(obj));
         return obj;
     }
 

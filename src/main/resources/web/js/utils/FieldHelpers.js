@@ -84,7 +84,23 @@ export class FieldHelpers {
         }
 
         for (const f of fields) {
-            if (f.children && f.children.length > 0) {
+            // Сначала проверяем enumValues, чтобы корректно обрабатывать $ref на enum-типы
+            if (f.enumValues && f.enumValues.length > 0) {
+                // Использовать первое значение enum как пример
+                const enumValue = f.enumValues[0];
+                console.log(`[FieldHelpers] Field "${f.name}" has enum values:`, f.enumValues, 'Using:', enumValue);
+                if (f.type === 'integer') {
+                    const n = parseInt(enumValue, 10);
+                    obj[f.name] = isNaN(n) ? enumValue : n;
+                } else if (f.type === 'number') {
+                    const n = parseFloat(enumValue);
+                    obj[f.name] = isNaN(n) ? enumValue : n;
+                } else if (f.type === 'boolean') {
+                    obj[f.name] = enumValue === 'true' || enumValue === true;
+                } else {
+                    obj[f.name] = enumValue;
+                }
+            } else if (f.children && f.children.length > 0) {
                 const childObj = this.generateExampleFromFields(f.children);
                 obj[f.name] = f.isArray ? [childObj] : childObj;
             } else if (f.example !== undefined && f.example !== '') {
