@@ -88,7 +88,6 @@ export class FieldHelpers {
             if (f.enumValues && f.enumValues.length > 0) {
                 // Использовать первое значение enum как пример
                 const enumValue = f.enumValues[0];
-                console.log(`[FieldHelpers] Field "${f.name}" has enum values:`, f.enumValues, 'Using:', enumValue);
                 if (f.type === 'integer') {
                     const n = parseInt(enumValue, 10);
                     obj[f.name] = isNaN(n) ? enumValue : n;

@@ -17,6 +17,17 @@ export class YamlParserService {
         const fields = [];
         const requiredFields = [];
 
+        // Проверка и парсинг allOf (слияние схем)
+        const allOfMatch = content.match(/^allOf\s*:/m);
+        if (allOfMatch) {
+            const mergedFields = await this.parseAllOfVariants(
+                content, depth, visitedRefs, currentFilePath, projectState
+            );
+            if (mergedFields.length > 0) {
+                return { fields: mergedFields };
+            }
+        }
+
         // Проверка и парсинг oneOf / anyOf (составные схемы)
         const compositeMatch = content.match(/^(oneOf|anyOf)\s*:/m);
         if (compositeMatch) {
@@ -158,11 +169,6 @@ export class YamlParserService {
                                     currentProp.description = topLevelEnum.description;
                                 }
                                 currentProp.children = [];
-                                console.log(`[YamlParser] Applied enum to field "${currentProp.name}":`, {
-                                    type: currentProp.type,
-                                    enumValues: currentProp.enumValues,
-                                    example: currentProp.example
-                                });
                             } else if (!visitedRefs.has(refName)) {
                                 // Это сложная схема с properties - парсить только если еще не посещена
                                 const newVisited = new Set(visitedRefs);
@@ -236,7 +242,6 @@ export class YamlParserService {
             await this.resolveNestedRef(currentProp, currentPropItemsRef, depth, visitedRefs, fields, currentFilePath, projectState);
         }
 
-        console.log(`[parseSchemaDtoRecursive] Parsed ${fields.length} fields at depth ${depth}:`, fields.map(f => ({name: f.name, type: f.type, hasEnum: f.enumValues?.length > 0, enumValues: f.enumValues})));
         return { fields };
     }
 
@@ -403,6 +408,126 @@ export class YamlParserService {
     }
 
     /**
+     * Парсинг allOf — объединяет все схемы в один набор полей
+     */
+    async parseAllOfVariants(content, depth, visitedRefs, currentFilePath, projectState) {
+        const allOfMatch = content.match(/^allOf\s*:/m);
+        if (!allOfMatch) return [];
+
+        const afterAllOf = content.substring(allOfMatch.index + allOfMatch[0].length);
+        const lines = afterAllOf.split('\n');
+
+        // Определить отступ первого элемента списка
+        let itemIndent = -1;
+        for (let i = 0; i < lines.length; i++) {
+            const t = lines[i].trim();
+            if (t === '' || t.startsWith('#')) continue;
+            if (t.startsWith('-')) {
+                itemIndent = lines[i].length - lines[i].trimStart().length;
+            }
+            break;
+        }
+        if (itemIndent === -1) return [];
+
+        // Разбить на блоки по дефисам
+        const allOfBlocks = [];
+        let currentBlock = null;
+        for (let i = 0; i < lines.length; i++) {
+            const raw = lines[i];
+            const trimmed = raw.trim();
+            if (trimmed === '') continue;
+            const indent = raw.length - raw.trimStart().length;
+            if (indent < itemIndent && trimmed !== '') break;
+            if (indent === itemIndent && trimmed.startsWith('-')) {
+                if (currentBlock !== null) allOfBlocks.push(currentBlock.join('\n'));
+                const afterDash = raw.replace(/^(\s*)-\s?/, '$1  ');
+                currentBlock = [afterDash];
+            } else if (currentBlock !== null) {
+                currentBlock.push(raw);
+            }
+        }
+        if (currentBlock !== null && currentBlock.length > 0) {
+            allOfBlocks.push(currentBlock.join('\n'));
+        }
+
+        console.log(`[parseAllOfVariants] Found ${allOfBlocks.length} schemas to merge`);
+
+        // Объединить все поля из всех блоков
+        const mergedFields = [];
+        const fieldNames = new Set(); // Для предотвращения дублирования
+
+        for (let i = 0; i < allOfBlocks.length; i++) {
+            const block = allOfBlocks[i];
+            
+            // Проверить, есть ли $ref на ВЕРХНЕМ уровне блока (не внутри properties/items)
+            // Ищем $ref который идет сразу, без отступов относительно начала блока
+            const lines = block.split('\n');
+            let topLevelRef = null;
+            
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed || trimmed.startsWith('#')) continue;
+                
+                // Если первая непустая строка начинается с $ref - это топ-уровень
+                if (trimmed.startsWith('$ref:')) {
+                    const match = trimmed.match(/\$ref:\s*['"]?([^\s'"]+)['"]?/);
+                    if (match) {
+                        topLevelRef = match[1];
+                    }
+                    break;
+                }
+                
+                // Если первая строка не $ref (например type:, properties:), то это НЕ топ-уровень $ref
+                break;
+            }
+            
+            if (topLevelRef) {
+                const refPath = topLevelRef;
+                const refName = refPath.split('/').pop().replace(/\.ya?ml$/, '');
+                console.log(`[parseAllOfVariants] Block ${i + 1}: Resolving $ref to ${refName}`);
+                
+                if (!visitedRefs.has(refName)) {
+                    const refContent = await this.fileService.resolveSchemaRef(refPath, currentFilePath, projectState);
+                    if (refContent) {
+                        const newVisited = new Set(visitedRefs);
+                        newVisited.add(refName);
+                        const schemaPath = this.fileService.resolveRelativePath(currentFilePath, refPath);
+                        // Для allOf используем тот же depth - это слияние схем на одном уровне
+                        const nested = await this.parseSchemaDtoRecursive(refContent, depth, newVisited, schemaPath, projectState);
+                        
+                        // Добавить поля, избегая дубликатов
+                        for (const field of nested.fields) {
+                            if (!fieldNames.has(field.name)) {
+                                console.log(`[parseAllOfVariants] Adding field "${field.name}", type: ${field.type}, isArray: ${field.isArray}, depth: ${field.depth}, hasChildren: ${field.children?.length > 0}`);
+                                mergedFields.push(field);
+                                fieldNames.add(field.name);
+                            }
+                        }
+                        console.log(`[parseAllOfVariants] Block ${i + 1}: Added ${nested.fields.length} fields from ${refName}`);
+                    }
+                }
+            } else {
+                // Инлайн схема с properties
+                console.log(`[parseAllOfVariants] Block ${i + 1}: Parsing inline schema`);
+                const nested = await this.parseSchemaDtoRecursive(block, depth, visitedRefs, currentFilePath, projectState);
+                
+                // Добавить поля, избегая дубликатов
+                for (const field of nested.fields) {
+                    if (!fieldNames.has(field.name)) {
+                        console.log(`[parseAllOfVariants] Adding field "${field.name}", type: ${field.type}, isArray: ${field.isArray}, hasChildren: ${field.children?.length > 0}, childrenCount: ${field.children?.length || 0}`);
+                        mergedFields.push(field);
+                        fieldNames.add(field.name);
+                    }
+                }
+                console.log(`[parseAllOfVariants] Block ${i + 1}: Added ${nested.fields.length} inline fields`);
+            }
+        }
+
+        console.log(`[parseAllOfVariants] Total merged fields: ${mergedFields.length}`);
+        return mergedFields;
+    }
+
+    /**
      * Разрезолвить вложенную ссылку
      */
     async resolveNestedRef(prop, refPath, depth, visitedRefs, fieldsArray, currentFilePath, projectState) {
@@ -495,7 +620,6 @@ export class YamlParserService {
         // Установить первое значение как пример
         if (result.enumValues.length > 0) {
             result.example = result.enumValues[0];
-            console.log('[parseTopLevelEnum] Parsed enum:', result);
             return result;
         }
 
