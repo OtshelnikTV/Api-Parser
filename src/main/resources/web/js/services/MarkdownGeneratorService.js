@@ -60,7 +60,12 @@ export class MarkdownGeneratorService {
             }
 
             if (d.exampleRequest) {
-                md += `### Пример запроса\n\n\`\`\`json\n${d.exampleRequest}\n\`\`\`\n\n`;
+                // Для GET запросов выводим как текст, для остальных как JSON
+                if (d.method.toUpperCase() === 'GET') {
+                    md += `### Пример запроса\n\n\`\`\`\n${d.exampleRequest}\n\`\`\`\n\n`;
+                } else {
+                    md += `### Пример запроса\n\n\`\`\`json\n${d.exampleRequest}\n\`\`\`\n\n`;
+                }
             }
 
             md += '---\n\n';

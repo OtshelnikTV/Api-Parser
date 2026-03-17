@@ -224,7 +224,12 @@ export class EndpointParserService {
         parsedData.errorResponses.push({ code: '500', description: 'Внутренняя ошибка сервера' });
 
         // Examples
-        parsedData.exampleRequest = JSON.stringify(this.generateExampleFromFields(parsedData.requestFields), null, 2);
+        // Для GET запросов генерируем URL с query параметрами
+        if (parsedData.method.toUpperCase() === 'GET') {
+            parsedData.exampleRequest = this.generateGetRequestExample(parsedData);
+        } else {
+            parsedData.exampleRequest = JSON.stringify(this.generateExampleFromFields(parsedData.requestFields), null, 2);
+        }
         parsedData.exampleRequestFromMd = false;
 
         if (parsedData.responseSchemas.length) {
@@ -468,7 +473,8 @@ export class EndpointParserService {
         }
 
         // Примеры
-        const reqExampleMatch = content.match(/### Пример запроса\s*\n\s*```json\s*\n([\s\S]*?)```/);
+        // Для GET запросов может быть как ```json, так и просто ```
+        const reqExampleMatch = content.match(/### Пример запроса\s*\n\s*```(?:json)?\s*\n([\s\S]*?)```/);
         if (reqExampleMatch) data.exampleRequest = reqExampleMatch[1].trim();
 
         const respExampleMatch = content.match(/### Пример ответа\s*\n\s*```json\s*\n([\s\S]*?)```/);
@@ -546,13 +552,150 @@ export class EndpointParserService {
             parsedData.algorithmFromMd = true;
         }
         if (existing.notes) parsedData.notes = existing.notes;
-        if (existing.exampleRequest) {
-            parsedData.exampleRequest = existing.exampleRequest;
+        
+        // Умный merge примеров: сохраняем кастомные значения, но обновляем структуру
+        if (existing.exampleRequest && parsedData.exampleRequest) {
+            // Для GET запросов используем пример из MD как есть (это URL с query параметрами)
+            if (parsedData.method.toUpperCase() === 'GET') {
+                parsedData.exampleRequest = existing.exampleRequest;
+            } else {
+                parsedData.exampleRequest = this.mergeExampleWithExisting(
+                    parsedData.exampleRequest, 
+                    existing.exampleRequest
+                );
+            }
             parsedData.exampleRequestFromMd = true;
         }
-        if (existing.exampleResponse) {
-            parsedData.exampleResponse = existing.exampleResponse;
+        if (existing.exampleResponse && parsedData.exampleResponse) {
+            parsedData.exampleResponse = this.mergeExampleWithExisting(
+                parsedData.exampleResponse, 
+                existing.exampleResponse
+            );
             parsedData.exampleResponseFromMd = true;
+        }
+    }
+
+    /**
+     * Умный merge примеров: сохраняет кастомные значения для существующих полей,
+     * добавляет новые поля и удаляет устаревшие
+     * @param {string} generatedExample - JSON-строка сгенерированного примера (актуальная схема)
+     * @param {string} existingExample - JSON-строка существующего примера из MD
+     * @returns {string} - JSON-строка смерженного примера
+     */
+    mergeExampleWithExisting(generatedExample, existingExample) {
+        try {
+            const generated = JSON.parse(generatedExample);
+            const existing = JSON.parse(existingExample);
+            
+            const merged = this.mergeExampleValues(generated, existing);
+            return JSON.stringify(merged, null, 2);
+        } catch (e) {
+            // Если не удалось распарсить - используем сгенерированный
+            console.warn('Failed to merge examples:', e);
+            return generatedExample;
+        }
+    }
+
+    /**
+     * Рекурсивный merge значений примеров
+     * @param {*} generated - Сгенерированное значение (актуальная структура)
+     * @param {*} existing - Существующее значение (может содержать кастомные значения)
+     * @returns {*} - Смерженное значение
+     */
+    mergeExampleValues(generated, existing) {
+        // Если типы не совпадают или existing null/undefined - используем generated
+        if (existing === null || existing === undefined) {
+            return generated;
+        }
+
+        const generatedType = Array.isArray(generated) ? 'array' : typeof generated;
+        const existingType = Array.isArray(existing) ? 'array' : typeof existing;
+
+        if (generatedType !== existingType) {
+            return generated;
+        }
+
+        // Для примитивов: используем существующее значение
+        if (generatedType !== 'object' && generatedType !== 'array') {
+            return existing;
+        }
+
+        // Для массивов: если есть элементы в обоих, мержим первый элемент
+        if (generatedType === 'array') {
+            if (generated.length === 0) {
+                return generated;
+            }
+            if (existing.length === 0) {
+                return generated;
+            }
+            // Мержим первый элемент массива, остальное берём из generated
+            const mergedFirst = this.mergeExampleValues(generated[0], existing[0]);
+            return [mergedFirst];
+        }
+
+        // Для объектов: итерируем по ключам generated
+        const result = {};
+        for (const key in generated) {
+            if (generated.hasOwnProperty(key)) {
+                if (existing.hasOwnProperty(key)) {
+                    // Ключ существует в обоих - рекурсивно мержим
+                    result[key] = this.mergeExampleValues(generated[key], existing[key]);
+                } else {
+                    // Новое поле - используем сгенерированное значение
+                    result[key] = generated[key];
+                }
+            }
+        }
+        // Игнорируем ключи из existing, которых нет в generated (они устарели)
+        return result;
+    }
+
+    /**
+     * Генерация примера GET запроса с URL и query параметрами
+     * @param {ParsedData} parsedData
+     * @returns {string} - Строка вида "GET /api/v1/endpoint?param1=value1&param2=value2"
+     */
+    generateGetRequestExample(parsedData) {
+        const queryParams = parsedData.parameters.filter(p => p.in === 'query');
+        const pathParams = parsedData.parameters.filter(p => p.in === 'path');
+        
+        // Заменяем path параметры в URL
+        let url = parsedData.url;
+        for (const param of pathParams) {
+            const exampleValue = param.example || this.getExampleValueForType(param.type, param.format);
+            url = url.replace(`{${param.name}}`, exampleValue);
+        }
+        
+        // Добавляем query параметры
+        if (queryParams.length > 0) {
+            const queryString = queryParams.map(p => {
+                const exampleValue = p.example || this.getExampleValueForType(p.type, p.format);
+                return `${p.name}=${exampleValue}`;
+            }).join('&');
+            url += '?' + queryString;
+        }
+        
+        return `${parsedData.method.toUpperCase()} ${url}`;
+    }
+
+    /**
+     * Получить пример значения для типа
+     */
+    getExampleValueForType(type, format) {
+        switch (type) {
+            case 'integer':
+                return format === 'int64' ? '100000' : '123';
+            case 'number':
+                return '99.99';
+            case 'boolean':
+                return 'true';
+            case 'string':
+                if (format === 'date-time') return '2024-01-15T10:30:00Z';
+                if (format === 'date') return '2024-01-15';
+                if (format === 'uuid') return '550e8400-e29b-41d4-a716-446655440000';
+                return 'value';
+            default:
+                return 'value';
         }
     }
 

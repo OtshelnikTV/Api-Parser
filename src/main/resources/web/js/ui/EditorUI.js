@@ -326,9 +326,21 @@ export class EditorUI {
         const value = isReq ? this.parsedData.exampleRequest : this.parsedData.exampleResponse;
         const binding = isReq ? 'parsedData.exampleRequest' : 'parsedData.exampleResponse';
         const fromMdFlag = isReq ? this.parsedData.exampleRequestFromMd : this.parsedData.exampleResponseFromMd;
-        const note = fromMdFlag ? '' : `<div class="info-note"><span class="info-note-icon">✏️</span><span>Пример сгенерирован из DTO. Замените значения на реалистичные.</span></div>`;
+        
+        // Для GET запросов особая подсказка и placeholder
+        const isGetRequest = isReq && this.parsedData.method.toUpperCase() === 'GET';
+        let note = '';
+        let placeholder = '{"field":"value"}';
+        
+        if (isGetRequest) {
+            note = fromMdFlag ? '' : `<div class="info-note"><span class="info-note-icon">✏️</span><span>Пример сгенерирован автоматически. Замените значения параметров на реалистичные.</span></div>`;
+            placeholder = 'GET /api/v1/endpoint?param1=value1&param2=value2';
+        } else {
+            note = fromMdFlag ? '' : `<div class="info-note"><span class="info-note-icon">✏️</span><span>Пример сгенерирован из DTO. Замените значения на реалистичные.</span></div>`;
+        }
+        
         return `${note}
-            <textarea class="block-editor highlight-manual" data-bind="${binding}" placeholder='{"field":"value"}'>${DOMHelpers.escape(value)}</textarea>`;
+            <textarea class="block-editor highlight-manual" data-bind="${binding}" placeholder='${placeholder}'>${DOMHelpers.escape(value)}</textarea>`;
     }
 
     renderResponses() {
