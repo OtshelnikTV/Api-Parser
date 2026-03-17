@@ -59,7 +59,7 @@ export class MarkdownGeneratorService {
                 md += '\n';
             }
 
-            if (hasReqBody && d.exampleRequest) {
+            if (d.exampleRequest) {
                 md += `### Пример запроса\n\n\`\`\`json\n${d.exampleRequest}\n\`\`\`\n\n`;
             }
 
