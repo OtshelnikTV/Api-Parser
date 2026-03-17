@@ -451,7 +451,7 @@ export class EndpointParserService {
         }
 
         // Алгоритм уже парсился ранее; ищем диаграмму mermaid (пункт 6)
-        const diagramMatch = content.match(/##\s*6\.\s*Блок-схема[\s\S]*?```mermaid([\s\S]*?)```/i);
+        const diagramMatch = content.match(/##\s*5\.\s*Блок-схема[\s\S]*?```mermaid([\s\S]*?)```/i);
         if (diagramMatch) {
             data.mermaidDiagram = diagramMatch[1].trim();
         }
