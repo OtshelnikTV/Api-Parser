@@ -40,10 +40,32 @@ export class YamlParserService {
         }
 
         // Извлечь required
-        const reqMatch = content.match(/^required:\s*\n((?:[ \t]+-[ \t]+\S+\n?)*)/m);
-        if (reqMatch) {
-            for (const m of reqMatch[1].matchAll(/-\s+(\S+)/g)) {
-                requiredFields.push(m[1]);
+        const reqSectionMatch = content.match(/^required:\s*$/m);
+        if (reqSectionMatch) {
+            const reqStartPos = reqSectionMatch.index;
+            const afterReq = content.substring(reqStartPos);
+            const reqLines = afterReq.split('\n');
+            
+            // Первая строка - "required:"
+            const baseIndent = reqLines[0].length - reqLines[0].trimStart().length;
+            
+            for (let i = 1; i < reqLines.length; i++) {
+                const line = reqLines[i];
+                const trimmed = line.trim();
+                
+                // Пропускаем пустые строки и комментарии
+                if (!trimmed || trimmed.startsWith('#')) continue;
+                
+                const indent = line.length - line.trimStart().length;
+                
+                // Если отступ меньше или равен базовому - конец секции required
+                if (indent <= baseIndent) break;
+                
+                // Извлекаем значение после дефиса
+                const match = trimmed.match(/^-\s+(\S+)/);
+                if (match) {
+                    requiredFields.push(match[1]);
+                }
             }
         }
 
