@@ -1,0 +1,24 @@
+<idea-plugin>
+    <id>com.apiHelper.yaml-docs</id>
+    <name>YAML Docs Parser</name>
+    <version>1.0.0</version>
+    <vendor>API Helper</vendor>
+
+    <description>
+        <![CDATA[
+        Parse and visualize documentation from YAML files.
+        Provides a tool window for working with YAML API documentation.
+        ]]>
+    </description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow
+                id="YAML Docs"
+                anchor="right"
+                factoryClass="com.apiHelper.YamlDocsToolWindowFactory"
+                canCloseContents="false"
+                icon="AllIcons.FileTypes.Yaml"/>
+    </extensions>
+</idea-plugin>
